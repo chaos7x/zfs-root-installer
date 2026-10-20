@@ -4,7 +4,7 @@
 #
 # Installiert Devuan GNU/Linux (Standard: 6.0 "excalibur", Trixie-Basis) auf ein natives
 # ZFS-Root. Gedacht fuer ein DEVUAN-Live-System mit ZFS (Devuan unter Devuan, kein Cross-Build;
-# siehe devuan_build-zfs-live-iso.sh). UNGETESTET, erster Entwurf.
+# siehe devuan_build-zfs-live-iso.sh). Getestet: Excalibur (amd64, VM); Daedalus und Ceres ungetestet.
 #
 # Unterschiede zur Debian-Fassung:
 #  - Release, Mirror (deb.devuan.org/merged) und Security-Zeile (<release>-security) fuer Devuan
