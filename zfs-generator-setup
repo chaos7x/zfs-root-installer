@@ -1,0 +1,194 @@
+#!/bin/bash
+#
+# zfs-generator-setup
+#
+# Richtet den ZFS-Mount-Generator ein (Cache /etc/zfs/zfs-list.cache/<pool>, gefuellt
+# vom zed). Der Generator macht aus ZFS-Datasets echte systemd-Mount-Units mit
+# richtiger Reihenfolge (z.B. var.mount vor journald).
+#
+# Aufruf:
+#   zfs-generator-setup               nur den Cache fuer alle importierten Pools anlegen
+#   zfs-generator-setup --convert-var legacy-Datasets aus /etc/fstab auf native
+#                                     Mountpoints umstellen und die fstab-Zeilen
+#                                     auskommentieren (danach Neustart)
+#
+# Muss auf dem installierten System laufen, nicht im chroot der Installation
+# (dort laeuft der zed nicht).
+
+# Pfade lassen sich zum Testen per Umgebungsvariable ueberschreiben
+CACHEDIR=${ZGS_CACHEDIR:-/etc/zfs/zfs-list.cache}
+FSTAB=${ZGS_FSTAB:-/etc/fstab}
+WAIT_SECONDS=20
+
+usage() {
+    sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+CONVERT=0
+case "${1:-}" in
+"") ;;
+--convert-var) CONVERT=1 ;;
+-h | --help)
+    usage
+    exit 0
+    ;;
+*)
+    echo "Unbekannte Option: $1" >&2
+    usage >&2
+    exit 1
+    ;;
+esac
+
+if [ "$(id -u)" -ne 0 ]; then
+    echo "Bitte als root ausfuehren." >&2
+    exit 1
+fi
+
+# Schreibt einen Pool-Namen in den Cache, indem ein harmloses zfs set eine
+# History-Meldung ausloest, auf die der zed reagiert.
+trigger_cache() {
+    local pool=$1
+    local canmount
+
+    canmount=$(zfs get -H -o value canmount "$pool")
+    zfs set canmount="$canmount" "$pool"
+}
+
+# Wartet, bis die Cache-Datei eines Pools Zeilen enthaelt.
+wait_for_cache() {
+    local pool=$1
+    local waited=0
+
+    while [ ! -s "$CACHEDIR/$pool" ]; do
+        if [ "$waited" -ge "$WAIT_SECONDS" ]; then
+            return 1
+        fi
+        sleep 1
+        waited=$((waited + 1))
+    done
+    return 0
+}
+
+# 1. zed muss laufen
+if ! systemctl is-active --quiet zfs-zed.service; then
+    echo "Starte zfs-zed.service ..."
+    if ! systemctl enable --now zfs-zed.service; then
+        echo "zfs-zed.service liess sich nicht starten (Paket zfs-zed installiert?)." >&2
+        exit 1
+    fi
+fi
+
+# 2. Cache-Dateien anlegen und fuellen
+mkdir -p "$CACHEDIR"
+POOLS=$(zpool list -H -o name)
+
+for pool in $POOLS; do
+    if [ ! -e "$CACHEDIR/$pool" ]; then
+        touch "$CACHEDIR/$pool"
+    fi
+done
+
+for pool in $POOLS; do
+    trigger_cache "$pool"
+done
+
+for pool in $POOLS; do
+    if wait_for_cache "$pool"; then
+        echo "Cache $pool: $(wc -l <"$CACHEDIR/$pool") Zeilen"
+    else
+        echo "Cache $pool blieb leer (zed laeuft? journalctl -u zfs-zed)." >&2
+        exit 1
+    fi
+done
+
+if [ "$CONVERT" -eq 0 ]; then
+    echo "Cache ist angelegt. Mit --convert-var stellt das Skript legacy-Datasets um."
+    exit 0
+fi
+
+# 3. legacy-Datasets aus der fstab auf native Mountpoints umstellen
+# Zeilen der Form: <dataset> <mountpoint> zfs ...
+DATASETS=()
+MOUNTPOINTS=()
+while read -r dataset mountpoint fstype _; do
+    case "$dataset" in
+    "" | \#*) continue ;;
+    esac
+    if [ "$fstype" = "zfs" ]; then
+        DATASETS+=("$dataset")
+        MOUNTPOINTS+=("$mountpoint")
+    fi
+done <"$FSTAB"
+
+if [ "${#DATASETS[@]}" -eq 0 ]; then
+    echo "Keine ZFS-Datasets in $FSTAB, nichts umzustellen."
+    exit 0
+fi
+
+echo "Stelle um: ${DATASETS[*]}"
+
+for i in "${!DATASETS[@]}"; do
+    dataset=${DATASETS[$i]}
+    mountpoint=${MOUNTPOINTS[$i]}
+
+    # /var ist eingehaengt und in Benutzung. Ohne -u versucht zfs, es auszuhaengen
+    # ("cannot unmount '/var': pool or dataset is busy") und setzt dann nichts.
+    # Mit -u wird nur die Eigenschaft geaendert, wirksam wird sie nach dem Neustart.
+    # -u gibt es ab ZFS 2.3; aeltere Versionen kennen die Option nicht.
+    if ! zfs set -u mountpoint="$mountpoint" "$dataset" 2>/dev/null; then
+        zfs set mountpoint="$mountpoint" "$dataset" || true
+    fi
+
+    current=$(zfs get -H -o value mountpoint "$dataset")
+    if [ "$current" != "$mountpoint" ]; then
+        echo "mountpoint von $dataset ist '$current', erwartet '$mountpoint'. Abbruch." >&2
+        echo "Wahrscheinlich ist das Dataset in Benutzung und diese ZFS-Version kennt 'zfs set -u' nicht." >&2
+        echo "Dann den Mountpoint aus einem Live-System setzen oder auf ZFS >= 2.3 aktualisieren." >&2
+        exit 1
+    fi
+done
+
+# Cache neu schreiben lassen und danach pruefen
+for pool in $POOLS; do
+    trigger_cache "$pool"
+done
+sleep 2
+
+# Sicherheitspruefung: erst wenn jedes Dataset mit dem richtigen Mountpoint im Cache
+# steht, duerfen die fstab-Zeilen weg. Sonst wuerde /var beim Start fehlen.
+FAILED=0
+for i in "${!DATASETS[@]}"; do
+    dataset=${DATASETS[$i]}
+    mountpoint=${MOUNTPOINTS[$i]}
+    pool=${dataset%%/*}
+
+    if awk -F'\t' -v ds="$dataset" -v mp="$mountpoint" '$1 == ds && $2 == mp { found = 1 } END { exit !found }' "$CACHEDIR/$pool"; then
+        echo "OK: $dataset -> $mountpoint steht im Cache"
+    else
+        echo "FEHLT im Cache $pool: $dataset mit Mountpoint $mountpoint" >&2
+        FAILED=1
+    fi
+done
+
+if [ "$FAILED" -ne 0 ]; then
+    echo "fstab bleibt unveraendert. Die fstab-Eintraege haben Vorrang, das System startet weiter normal." >&2
+    exit 1
+fi
+
+# fstab sichern und die Zeilen auskommentieren
+BACKUP="$FSTAB.vor-generator"
+cp -a "$FSTAB" "$BACKUP"
+echo "Sicherung: $BACKUP"
+
+for dataset in "${DATASETS[@]}"; do
+    # Nur Zeilen, die mit genau diesem Dataset beginnen
+    sed -i "s|^$dataset[[:space:]]|#&|" "$FSTAB"
+done
+
+systemctl daemon-reload
+
+echo
+echo "fstab-Zeilen sind auskommentiert. Jetzt neu starten (reboot) und danach pruefen:"
+echo "  systemctl status var.mount"
+echo "  mount --bind / /mnt; ls -A /mnt/var; umount /mnt"
+echo "Zurueck: cp $BACKUP $FSTAB; zfs set mountpoint=legacy <dataset>"

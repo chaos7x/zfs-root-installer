@@ -1,0 +1,212 @@
+#!/bin/bash
+# zfs-rollback-system - Systemdatasets auf einen gemeinsamen Snapshot zurueckrollen
+#
+# Fuer das LIVE-System (Rollback der eingehaengten Root geht im laufenden System nicht).
+# Importiert die Pools root und boot, prueft die Snapshots, rollt alle Systemdatasets
+# auf denselben Snapshot zurueck und schreibt danach initramfs und GRUB neu.
+# Der Daten-Pool (daten) wird weder importiert noch veraendert.
+#
+# Aufruf:
+#   zfs-rollback-system [-n] [-y] [SNAPSHOT]
+#     SNAPSHOT  Name hinter dem @ (Standard: vor-trixie)
+#     -n        nur pruefen und anzeigen, nichts aendern
+#     -y        keine Rueckfrage
+#
+# Anpassbar per Umgebungsvariable:
+#   POOLS="root boot"                      zu importierende Pools
+#   REQUIRED="root/ROOT/debian root/var boot/BOOT/debian"       muessen den Snapshot haben
+#   OPTIONAL="root/var/tmp root/var/log"                        werden mitgerollt, wenn vorhanden
+#   ROLLBACK_SKIP_GRUB=1                   initramfs/GRUB nicht neu schreiben
+
+set -eu
+
+SNAP=vor-trixie
+DRYRUN=0
+ASSUME_YES=0
+while [ $# -gt 0 ]; do
+	case "$1" in
+	-n) DRYRUN=1 ;;
+	-y) ASSUME_YES=1 ;;
+	-h | --help)
+		sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'
+		exit 0
+		;;
+	-*)
+		echo "Unbekannte Option: $1" >&2
+		exit 1
+		;;
+	*) SNAP=$1 ;;
+	esac
+	shift
+done
+
+POOLS=${POOLS:-"root boot"}
+REQUIRED=${REQUIRED:-"root/ROOT/debian root/var boot/BOOT/debian"}
+OPTIONAL=${OPTIONAL:-"root/var/tmp root/var/log"}
+ALTROOT=/mnt
+
+if [ "$(id -u)" -ne 0 ]; then
+	echo "Bitte als root starten." >&2
+	exit 1
+fi
+
+# Nicht im laufenden System: dann ist die Root eingehaengt
+ROOTSRC=$(findmnt -n -o SOURCE / 2>/dev/null || true)
+case "$ROOTSRC" in
+root/* | boot/*)
+	echo "Das laufende System liegt auf $ROOTSRC. Bitte vom Live-System starten." >&2
+	exit 1
+	;;
+esac
+
+echo "=== 1. Pools importieren (ohne Einhaengen) ==="
+for p in $POOLS; do
+	if zpool list -H -o name 2>/dev/null | grep -qx "$p"; then
+		echo "Pool $p ist schon importiert."
+	else
+		zpool import -d /dev/disk/by-id -f -N -R "$ALTROOT" "$p"
+	fi
+done
+
+echo
+echo "=== 2. Snapshots @$SNAP pruefen ==="
+fail=0
+USE=()
+for ds in $REQUIRED; do
+	if zfs list -H -t snapshot -o name "$ds@$SNAP" >/dev/null 2>&1; then
+		USE+=("$ds")
+	else
+		echo "FEHLT (Pflicht): $ds@$SNAP" >&2
+		fail=1
+	fi
+done
+for ds in $OPTIONAL; do
+	if ! zfs list -H -o name "$ds" >/dev/null 2>&1; then
+		echo "Dataset $ds gibt es nicht, wird uebersprungen."
+	elif zfs list -H -t snapshot -o name "$ds@$SNAP" >/dev/null 2>&1; then
+		USE+=("$ds")
+	else
+		echo "Hinweis: $ds@$SNAP fehlt, $ds bleibt unveraendert."
+	fi
+done
+if [ "$fail" -ne 0 ]; then
+	echo "Abbruch: nicht alle Pflicht-Datasets haben den Snapshot. Vorhandene Snapshots:" >&2
+	zfs list -t snapshot -o name,creation -s creation | grep -E "@" | grep -F "$SNAP" >&2 || true
+	exit 1
+fi
+
+# Neuere Snapshots, die das Rollback mit -r loescht
+newer_snaps() {
+	zfs list -H -t snapshot -d 1 -o name -s creation "$1" 2>/dev/null |
+		awk -v t="$1@$SNAP" 'f { print } $0 == t { f = 1 }'
+}
+
+echo
+printf '%-26s %s\n' "Dataset" "Snapshot-Zeitpunkt / neuere Snapshots (werden geloescht)"
+for ds in "${USE[@]}"; do
+	created=$(zfs get -H -p -o value creation "$ds@$SNAP")
+	when=$(date -d "@$created" '+%F %T')
+	n=$(newer_snaps "$ds" | wc -l)
+	printf '%-26s %s, %s neuere\n' "$ds" "$when" "$n"
+done
+echo
+echo "Der Daten-Pool (daten) wird nicht angefasst."
+
+if [ "$DRYRUN" = 1 ]; then
+	echo "Nur-Pruefen-Modus (-n): nichts geaendert."
+	exit 0
+fi
+
+if [ "$ASSUME_YES" != 1 ]; then
+	read -r -p "Diese Datasets jetzt auf @$SNAP zurueckrollen? [ja/NEIN] " ANTWORT
+	if [ "$ANTWORT" != "ja" ]; then
+		echo "Abgebrochen, nichts geaendert."
+		exit 0
+	fi
+fi
+
+echo
+echo "=== 3. Rollback ==="
+for ds in "${USE[@]}"; do
+	echo "zfs rollback -r $ds@$SNAP"
+	zfs rollback -r "$ds@$SNAP"
+done
+
+if [ "${ROLLBACK_SKIP_GRUB:-0}" = 1 ]; then
+	echo "ROLLBACK_SKIP_GRUB=1: initramfs und GRUB bleiben unveraendert."
+	exit 0
+fi
+
+echo
+echo "=== 4. Einhaengen ==="
+zfs mount root/ROOT/debian
+zfs mount -a
+# Datasets mit mountpoint=legacy stehen in der fstab und werden von zfs mount -a nicht gehaengt
+for ds in root/var root/var/tmp root/var/log; do
+	if zfs list -H -o name "$ds" >/dev/null 2>&1 &&
+		[ "$(zfs get -H -o value mountpoint "$ds")" = legacy ]; then
+		target=$ALTROOT/${ds#root/}
+		mkdir -p "$target"
+		mountpoint -q "$target" || mount -t zfs "$ds" "$target"
+	fi
+done
+if ! mountpoint -q "$ALTROOT/boot"; then
+	echo "$ALTROOT/boot ist nicht eingehaengt (boot/BOOT/debian). Abbruch." >&2
+	exit 1
+fi
+findmnt -R "$ALTROOT" | head -20
+
+# Plattenpfad(e) der Boot-Pool-Geraete fuer grub-install
+DISKS=()
+for dev in $(zpool status -P boot | awk '/\/dev\//{print $1}'); do
+	real=$(readlink -f "$dev")
+	parent=$(lsblk -no pkname "$real" 2>/dev/null | head -n1 || true)
+	disk=${parent:+/dev/$parent}
+	disk=${disk:-$real}
+	case " ${DISKS[*]:-} " in
+	*" $disk "*) ;;
+	*) DISKS+=("$disk") ;;
+	esac
+done
+echo "Boot-Platte(n): ${DISKS[*]}"
+
+echo
+echo "=== 5. chroot: initramfs, GRUB ==="
+for d in dev proc sys; do
+	mount --rbind /$d "$ALTROOT/$d"
+done
+
+if [ -d /sys/firmware/efi ]; then
+	chroot "$ALTROOT" /bin/bash -e <<'EOF'
+mount /boot/efi || true
+update-initramfs -u -k all
+ZPOOL_VDEV_NAME_PATH=YES update-grub
+ZPOOL_VDEV_NAME_PATH=YES grub-install --recheck
+EOF
+else
+	chroot "$ALTROOT" /bin/bash -e -c '
+update-initramfs -u -k all
+ZPOOL_VDEV_NAME_PATH=YES update-grub
+for disk in "$@"; do
+	ZPOOL_VDEV_NAME_PATH=YES grub-install --recheck "$disk"
+done
+' _ "${DISKS[@]}"
+fi
+
+echo
+echo "=== 6. Aufraeumen ==="
+cd /
+umount -R "$ALTROOT/dev" "$ALTROOT/proc" "$ALTROOT/sys" || true
+for p in $ALTROOT/var/log $ALTROOT/var/tmp $ALTROOT/var; do
+	mountpoint -q "$p" && umount "$p" || true
+done
+zfs unmount -a || true
+for p in $POOLS; do
+	zpool export "$p" || echo "Pool $p liess sich nicht exportieren, bitte von Hand: zpool export $p" >&2
+done
+
+echo
+echo "Fertig. Live-Medium entfernen und neu starten: reboot"
+echo "Danach pruefen:"
+echo "  cat /etc/debian_version ; zfs version"
+echo "  findmnt /boot ; zpool status -x ; systemctl --failed"

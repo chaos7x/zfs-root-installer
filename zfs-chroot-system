@@ -1,0 +1,137 @@
+#!/bin/bash
+# zfs-chroot-system - das installierte ZFS-System vom Live-System aus einhaengen und betreten
+#
+# Importiert root und boot, haengt alle Systemdatasets unter /mnt ein, bindet dev, proc, sys
+# (und die resolv.conf des Live-Systems) ein und startet eine Shell im chroot. Nach "exit"
+# wird wieder ausgehaengt und exportiert. Der Daten-Pool (daten) wird nur mit -d importiert.
+#
+# Aufruf:
+#   zfs-chroot-system [-d] [-k] [-x BEFEHL]
+#     -d          auch den Pool daten importieren (nicht einhaengen)
+#     -k          nach dem chroot eingehaengt lassen (kein Aufraeumen, kein Export)
+#     -x BEFEHL   statt einer Shell diesen Befehl im chroot ausfuehren
+#
+# Typische Folgeschritte im chroot (Rettung, siehe Anleitung 5.6):
+#   update-initramfs -u -k all ; update-grub ; grub-install <Platte>
+#
+# Anpassbar per Umgebungsvariable: POOLS="root boot", ROOTDS=root/ROOT/debian
+
+set -eu
+
+IMPORT_DATEN=0
+KEEP=0
+CMD=
+while [ $# -gt 0 ]; do
+	case "$1" in
+	-d) IMPORT_DATEN=1 ;;
+	-k) KEEP=1 ;;
+	-x)
+		if [ $# -lt 2 ]; then
+			echo "Option -x braucht einen Befehl" >&2
+			exit 1
+		fi
+		CMD=$2
+		shift
+		;;
+	-h | --help)
+		sed -n '2,17p' "$0" | sed 's/^# \{0,1\}//'
+		exit 0
+		;;
+	*)
+		echo "Unbekannte Option: $1" >&2
+		exit 1
+		;;
+	esac
+	shift
+done
+
+POOLS=${POOLS:-"root boot"}
+ROOTDS=${ROOTDS:-root/ROOT/debian}
+ALTROOT=/mnt
+[ "$IMPORT_DATEN" = 1 ] && POOLS="$POOLS daten"
+
+if [ "$(id -u)" -ne 0 ]; then
+	echo "Bitte als root starten." >&2
+	exit 1
+fi
+
+# Nicht im installierten System selbst
+ROOTSRC=$(findmnt -n -o SOURCE / 2>/dev/null || true)
+case "$ROOTSRC" in
+root/* | boot/*)
+	echo "Das laufende System liegt auf $ROOTSRC. Bitte vom Live-System starten." >&2
+	exit 1
+	;;
+esac
+
+IMPORTED=()
+cleanup() {
+	[ "$KEEP" = 1 ] && return 0
+	cd /
+	echo
+	echo "=== Aufraeumen ==="
+	umount -R "$ALTROOT/dev" "$ALTROOT/proc" "$ALTROOT/sys" 2>/dev/null ||
+		umount -R -l "$ALTROOT/dev" "$ALTROOT/proc" "$ALTROOT/sys" 2>/dev/null || true
+	mountpoint -q "$ALTROOT/etc/resolv.conf" && umount "$ALTROOT/etc/resolv.conf" || true
+	mountpoint -q "$ALTROOT/boot/efi" && umount "$ALTROOT/boot/efi" || true
+	for p in $ALTROOT/var/log $ALTROOT/var/tmp $ALTROOT/var; do
+		mountpoint -q "$p" && umount "$p" || true
+	done
+	zfs unmount -a 2>/dev/null || true
+	for p in "${IMPORTED[@]:-}"; do
+		[ -n "$p" ] || continue
+		zpool export "$p" || echo "Pool $p liess sich nicht exportieren: zpool export $p" >&2
+	done
+}
+trap cleanup EXIT
+
+echo "=== Pools importieren ==="
+for p in $POOLS; do
+	if zpool list -H -o name 2>/dev/null | grep -qx "$p"; then
+		echo "Pool $p ist schon importiert (wird am Ende nicht exportiert)."
+	else
+		zpool import -d /dev/disk/by-id -f -N -R "$ALTROOT" "$p"
+		IMPORTED+=("$p")
+	fi
+done
+
+echo "=== Einhaengen ==="
+zfs mount "$ROOTDS"
+zfs mount -a 2>/dev/null || true
+# Datasets mit mountpoint=legacy stehen in der fstab und werden von zfs mount -a nicht gehaengt
+for ds in root/var root/var/tmp root/var/log; do
+	if zfs list -H -o name "$ds" >/dev/null 2>&1 &&
+		[ "$(zfs get -H -o value mountpoint "$ds")" = legacy ]; then
+		target=$ALTROOT/${ds#root/}
+		mkdir -p "$target"
+		mountpoint -q "$target" || mount -t zfs "$ds" "$target"
+	fi
+done
+if zpool list -H -o name | grep -qx boot && ! mountpoint -q "$ALTROOT/boot"; then
+	zfs mount boot/BOOT/debian 2>/dev/null || true
+fi
+if ! mountpoint -q "$ALTROOT/boot"; then
+	echo "Warnung: $ALTROOT/boot ist nicht eingehaengt (boot/BOOT/debian)." >&2
+fi
+
+for d in dev proc sys; do
+	mount --rbind /$d "$ALTROOT/$d"
+done
+# Netzwerk im chroot (apt): resolv.conf des Live-Systems einbinden
+if [ -f "$ALTROOT/etc/resolv.conf" ] && [ ! -L "$ALTROOT/etc/resolv.conf" ]; then
+	mount --bind /etc/resolv.conf "$ALTROOT/etc/resolv.conf" 2>/dev/null || true
+fi
+# ESP, falls die fstab des Systems eine hat (EFI-Installation)
+if grep -qE '[[:space:]]/boot/efi[[:space:]]' "$ALTROOT/etc/fstab" 2>/dev/null; then
+	chroot "$ALTROOT" mount /boot/efi 2>/dev/null || echo "Hinweis: /boot/efi liess sich nicht einhaengen." >&2
+fi
+
+findmnt -R "$ALTROOT" | head -20
+echo
+
+if [ -n "$CMD" ]; then
+	chroot "$ALTROOT" /bin/bash -c "$CMD"
+else
+	echo "chroot in $ALTROOT. Mit exit verlassen${KEEP:+ (eingehaengt bleibt es mit -k)}."
+	chroot "$ALTROOT" /usr/bin/env CHROOT_SYSTEM=1 /bin/bash -l || true
+fi
