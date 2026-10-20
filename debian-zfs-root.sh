@@ -1,8 +1,8 @@
 #!/bin/bash -e
 #
-# debian-bookworm-zfs-root.sh
+# debian-zfs-root.sh
 #
-# Install Debian GNU/Linux 12 Bookworm to a native ZFS root filesystem
+# Install Debian GNU/Linux (Bookworm, Trixie, Forky) to a native ZFS root filesystem
 # (arm64 oder amd64, BIOS oder EFI)
 #
 # Abgeleitet von https://github.com/hn/debian-buster-zfs-root
