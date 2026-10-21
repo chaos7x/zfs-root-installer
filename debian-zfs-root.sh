@@ -66,6 +66,9 @@ Swap:
   --zvol-size GROESSE Groesse des Swap-ZVOL (nur bei --swap zvol)     [2G]
   --zram yes|no       zram-Swap (Paket zram-tools)                    [Dialog, mit --yes: yes]
   --zram-percent N    zram-Groesse in % vom RAM                       [50]
+  --ssh-server yes|no OpenSSH-Server (openssh-server, task-ssh-server) [Dialog, mit --yes: yes]
+  --standard yes|no   Pakete der Prioritaet "standard" (wie tasksel standard)
+                                                                   [Dialog, mit --yes: no]
 
 System:
   --hostname NAME     Hostname                             [debian-<hostid>]
@@ -188,6 +191,26 @@ while [ $# -gt 0 ]; do
 		esac
 		;;
 	--zram-percent) TARGET_ZRAMPERCENT=$val ;;
+	--ssh-server)
+		case "$val" in
+		yes | 1 | on) TARGET_SSHSERVER=1 ;;
+		no | 0 | off) TARGET_SSHSERVER=0 ;;
+		*)
+			echo "--ssh-server erwartet yes oder no" >&2
+			exit 1
+			;;
+		esac
+		;;
+	--standard)
+		case "$val" in
+		yes | 1 | on) TARGET_STANDARD=1 ;;
+		no | 0 | off) TARGET_STANDARD=0 ;;
+		*)
+			echo "--standard erwartet yes oder no" >&2
+			exit 1
+			;;
+		esac
+		;;
 	--hostname) TARGET_HOSTNAME=$val ;;
 	--dist) TARGET_DIST=$val ;;
 	--mirror) TARGET_MIRROR=$val ;;
@@ -521,6 +544,30 @@ else
 	ZRAM=0
 fi
 
+# OpenSSH-Server: Standard ja (ohne Server kommt man nach der Installation nur an der Konsole hinein)
+if [ -n "${TARGET_SSHSERVER+x}" ]; then
+	SSHSERVER=$TARGET_SSHSERVER
+elif [ -n "$OPT_YES" ]; then
+	SSHSERVER=1
+elif whiptail --backtitle "$0" --title "SSH-Server" \
+	--yesno "\nOpenSSH-Server installieren (openssh-server, task-ssh-server)?\n" 10 70; then
+	SSHSERVER=1
+else
+	SSHSERVER=0
+fi
+
+# Pakete der Prioritaet "standard" (wie die Aufgabe "Standard-Systemwerkzeuge" im Debian-Installer): Standard nein
+if [ -n "${TARGET_STANDARD+x}" ]; then
+	STANDARD=$TARGET_STANDARD
+elif [ -n "$OPT_YES" ]; then
+	STANDARD=0
+elif whiptail --backtitle "$0" --title "Standardpakete" --defaultno \
+	--yesno "\nPakete der Prioritaet standard nachinstallieren (wie tasksel standard)?\n\nDas sind z.B. man-db und diverse Hilfswerkzeuge, je nach Release auch ein Mailserver.\n" 12 70; then
+	STANDARD=1
+else
+	STANDARD=0
+fi
+
 # Boot mode: arm64 is EFI only, amd64 depends on the live system
 BOOTMODE=BIOS
 if [ "$ARCH" == "arm64" ]; then
@@ -573,7 +620,7 @@ if [ "$SECUREBOOT" = 1 ]; then SBTXT=shim; fi
 
 if [ -z "$OPT_YES" ]; then
 	whiptail --backtitle "$0" --title "Confirmation" \
-		--yesno "\nAre you sure to destroy ZFS pool '$ZPOOL' (if existing), wipe all data of disks '${DISKS[*]}' and create a RAID '$RAIDLEVEL' (boot mode: $BOOTMODE, pool features: ${COMPAT:-all}, swap: $SWAPMODE${SWAPPARTSIZE:+ $SWAPPARTSIZE}, zram: $ZRAM, boot pool: ${BPOOL:-none}, secure boot: $SBTXT)?\n" 20 74 || exit 1
+		--yesno "\nAre you sure to destroy ZFS pool '$ZPOOL' (if existing), wipe all data of disks '${DISKS[*]}' and create a RAID '$RAIDLEVEL' (boot mode: $BOOTMODE, pool features: ${COMPAT:-all}, swap: $SWAPMODE${SWAPPARTSIZE:+ $SWAPPARTSIZE}, zram: $ZRAM, ssh-server: $SSHSERVER, standard: $STANDARD, boot pool: ${BPOOL:-none}, secure boot: $SBTXT)?\n" 22 74 || exit 1
 fi
 
 ### Start the real work
@@ -729,7 +776,11 @@ if [ ! -e /usr/share/debootstrap/scripts/$TARGETDIST ] && [ -e /usr/share/deboot
 	echo "debootstrap kennt '$TARGETDIST' nicht, nehme das Skript von sid" >&2
 	DBSCRIPT=/usr/share/debootstrap/scripts/sid
 fi
-debootstrap $DEBOOTSTRAP_OPTS --include=openssh-server,ifupdown,isc-dhcp-client,locales,linux-headers-$ARCH,linux-image-$ARCH,bash-completion,rsync,sharutils,psmisc,htop,patch,less,aptitude,task-ssh-server,zstd,locales-all --components $COMPONENTS $TARGETDIST /target $MIRROR $DBSCRIPT
+SSHPKGS=
+if [ "$SSHSERVER" = 1 ]; then
+	SSHPKGS=openssh-server,task-ssh-server,
+fi
+debootstrap $DEBOOTSTRAP_OPTS --include=${SSHPKGS}ifupdown,isc-dhcp-client,locales,linux-headers-$ARCH,linux-image-$ARCH,bash-completion,rsync,sharutils,psmisc,htop,patch,less,aptitude,zstd,locales-all --components $COMPONENTS $TARGETDIST /target $MIRROR $DBSCRIPT
 
 test -n "$NEWHOST" || NEWHOST=debian-$(hostid)
 echo "$NEWHOST" >/target/etc/hostname
@@ -796,6 +847,10 @@ de_*)
 	chroot /target env DEBIAN_FRONTEND=noninteractive /usr/bin/apt-get install --yes task-german
 	;;
 esac
+
+if [ "$STANDARD" = 1 ]; then
+	chroot /target env DEBIAN_FRONTEND=noninteractive /usr/bin/apt-get install --yes '~pstandard'
+fi
 
 if [ "$ZRAM" == "1" ]; then
 	chroot /target env DEBIAN_FRONTEND=noninteractive /usr/bin/apt-get install --yes zram-tools
