@@ -76,6 +76,10 @@ Hinweise:
 - Vorgaben in den Scripts (`vor-trixie`, `root/ROOT/debian`, …) lassen sich per Umgebungsvariable ändern, siehe Script-Köpfe.
 - Der erste Start nach einem Rollback kann einmalig ein `zpool import -f root` in der initramfs brauchen (Host-ID des Live-Systems).
 
+## Aus dem RAM starten
+
+Beide Live-ISOs haben einen zusätzlichen Boot-Menüeintrag „... im RAM (toram)“. Er kopiert das ganze System-Image in den RAM (live-boot `toram`), danach lässt sich USB-Stick oder CD entfernen. Der RAM muss größer sein als das Image (etwa so groß wie das ISO, plus Arbeitsspeicher). Bei einem anderen ISO `toram` von Hand an die Kernel-Zeile hängen.
+
 ## Teststatus
 
 | Bereich | Status |
@@ -89,6 +93,7 @@ Hinweise:
 | Secure Boot unter Devuan | nicht unterstützt |
 | `zfs-rollback-system` | in VM und auf echter Hardware (BIOS) getestet; EFI-Zweig ungetestet |
 | `zfs-chroot-system` | kurz getestet |
+| ISO-Menüeintrag „im RAM (toram)“ | ungetestet (Debian: Binary-Hook nur gegen nachgebaute Konfigdateien geprüft; Devuan: einfacher GRUB-Eintrag) |
 
 ## Hinweis Proxmox / Secure Boot
 
