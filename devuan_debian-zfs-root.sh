@@ -73,6 +73,8 @@ Platten und Pool:
                       Boot-Pool                  [Dialog (Vorschlag: boot), mit --yes: aus]
   --bpool-size GR.    Groesse der Boot-Pool-Partition      [1G]
   --bpool-compat PROF Feature-Profil des Boot-Pools        [grub2]
+  --compression ALG   Kompression des Root-Pools: lz4 oder zstd (zstd nur mit Boot-Pool,
+                      GRUB kann zstd nicht lesen)   [Dialog; mit Boot-Pool zstd, sonst lz4]
 
 Swap:
   --swap WERT         Groesse der Swap-Partition je Platte (z.B. 4G),
@@ -186,6 +188,15 @@ while [ $# -gt 0 ]; do
 		;;
 	--bpool-size) TARGET_SIZEBPOOL=$val ;;
 	--bpool-compat) TARGET_BCOMPAT=$val ;;
+	--compression)
+		case "$val" in
+		lz4 | zstd) TARGET_COMPRESSION=$val ;;
+		*)
+			echo "--compression erwartet lz4 oder zstd" >&2
+			exit 1
+			;;
+		esac
+		;;
 	--swap)
 		case "$val" in
 		zvol) TARGET_SWAPPART=0 ;;
@@ -428,6 +439,22 @@ else
 	COMPAT=${TARGET_COMPAT-zol-0.7}
 fi
 
+# Kompression des Root-Pools. zstd setzt ein Root-Pool mit allen Features voraus und damit einen
+# Boot-Pool, denn GRUB kann zstd nicht lesen (/boot muss in einem lz4-Pool liegen).
+if [ -n "${TARGET_COMPRESSION:-}" ]; then
+	RCOMP=$TARGET_COMPRESSION
+elif [ -z "$OPT_YES" ] && [ -n "$BPOOL" ] && [ -z "$COMPAT" ]; then
+	whiptail --backtitle "$0" --title "Kompression" --default-item zstd \
+		--menu "\nKompression des Root-Pools:\n" 14 70 2 \
+		zstd "staerker komprimiert, etwas mehr CPU (empfohlen)" \
+		lz4 "sehr schnell, schwaecher" 2>"$TMPFILE" || exit 1
+	RCOMP=$(head -n1 "$TMPFILE")
+fi
+if [ "$RCOMP" = zstd ] && { [ -z "$BPOOL" ] || [ -n "$COMPAT" ]; }; then
+	echo "zstd braucht einen Boot-Pool und ein Root-Pool ohne Feature-Begrenzung (GRUB kann zstd nicht lesen)" >&2
+	exit 1
+fi
+
 # Partitionsnummern in der Reihenfolge auf der Platte:
 #   ohne Boot-Pool: 1 Boot/ESP, 2 Root, 3 Swap
 #   mit Boot-Pool:  1 Boot/ESP, 2 Boot-Pool, 3 Root, 4 Swap
@@ -641,7 +668,7 @@ if [ "$SECUREBOOT" = 1 ]; then SBTXT=shim; fi
 
 if [ -z "$OPT_YES" ]; then
 	whiptail --backtitle "$0" --title "Confirmation" \
-		--yesno "\nAre you sure to destroy ZFS pool '$ZPOOL' (if existing), wipe all data of disks '${DISKS[*]}' and create a RAID '$RAIDLEVEL' (boot mode: $BOOTMODE, pool features: ${COMPAT:-all}, swap: $SWAPMODE${SWAPPARTSIZE:+ $SWAPPARTSIZE}, zram: $ZRAM, ssh-server: $SSHSERVER, standard: $STANDARD, boot pool: ${BPOOL:-none}, secure boot: $SBTXT)?\n" 22 74 || exit 1
+		--yesno "\nAre you sure to destroy ZFS pool '$ZPOOL' (if existing), wipe all data of disks '${DISKS[*]}' and create a RAID '$RAIDLEVEL' (boot mode: $BOOTMODE, pool features: ${COMPAT:-all}, compression: $RCOMP, swap: $SWAPMODE${SWAPPARTSIZE:+ $SWAPPARTSIZE}, zram: $ZRAM, ssh-server: $SSHSERVER, standard: $STANDARD, boot pool: ${BPOOL:-none}, secure boot: $SBTXT)?\n" 22 74 || exit 1
 fi
 
 ### Start the real work
@@ -763,7 +790,7 @@ chmod 1777 /target/var/tmp
 # Muss vor debootstrap angelegt werden, sonst verdeckt der Mount schon vorhandene Logs.
 # Wie /var legacy mit fstab-Eintrag, damit das Journal rechtzeitig einen Mount hat.
 if [ "$VARLOG" = 1 ]; then
-	zfs create -o mountpoint=legacy -o compression=zstd -o com.sun:auto-snapshot=false -o quota=$SIZEVARLOG $ZPOOL/var/log
+	zfs create -o mountpoint=legacy -o compression=$RCOMP -o com.sun:auto-snapshot=false -o quota=$SIZEVARLOG $ZPOOL/var/log
 	mkdir -v /target/var/log
 	mount -t zfs $ZPOOL/var/log /target/var/log
 fi
