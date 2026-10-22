@@ -78,7 +78,7 @@ Notes:
 
 ## Run from RAM
 
-Both live ISOs have an extra boot menu entry "... im RAM (toram)". It copies the whole system image into RAM (live-boot `toram`), so the USB stick or CD can be removed afterwards. The RAM must be larger than the image (roughly 1.5 GB plus working space). With another ISO, add `toram` to the kernel command line by hand.
+Both live ISOs have an extra boot menu entry "... im RAM (toram)". It copies the whole system image into RAM (live-boot `toram`), so the USB stick or CD can be removed afterwards. The RAM must be larger than the image (about the size of the ISO, plus working space). With another ISO, add `toram` to the kernel command line by hand.
 
 ## Test status
 

@@ -78,7 +78,7 @@ Hinweise:
 
 ## Aus dem RAM starten
 
-Beide Live-ISOs haben einen zusätzlichen Boot-Menüeintrag „... im RAM (toram)“. Er kopiert das ganze System-Image in den RAM (live-boot `toram`), danach lässt sich USB-Stick oder CD entfernen. Der RAM muss größer sein als das Image (grob 1,5 GB plus Arbeitsspeicher). Bei einem anderen ISO `toram` von Hand an die Kernel-Zeile hängen.
+Beide Live-ISOs haben einen zusätzlichen Boot-Menüeintrag „... im RAM (toram)“. Er kopiert das ganze System-Image in den RAM (live-boot `toram`), danach lässt sich USB-Stick oder CD entfernen. Der RAM muss größer sein als das Image (etwa so groß wie das ISO, plus Arbeitsspeicher). Bei einem anderen ISO `toram` von Hand an die Kernel-Zeile hängen.
 
 ## Teststatus
 
