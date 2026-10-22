@@ -23,7 +23,7 @@ Keep the scripts in one directory: the ISO builders pick up the installer and th
 ## Features
 
 - Native ZFS root, pool layout `root/ROOT/<name>`, `root/var`, `root/var/log`, `root/var/tmp`, `root/tmp`
-- Optional separate **boot pool** (`compatibility=grub2`, mirrored over all disks), root pool with all features, zstd, `dnodesize=auto`
+- Optional separate **boot pool** (`compatibility=grub2`, mirrored over all disks), root pool with all features, zstd or lz4 (`--compression`), `dnodesize=auto`
 - RAID levels: single/raid0, mirror, raidz, raidz2, raidz3
 - BIOS and EFI, **Secure Boot** (shim-signed, signed GRUB, MOK for DKMS) on Debian Trixie
 - Swap as partition, ZVOL or none, optional zram

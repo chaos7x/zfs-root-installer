@@ -23,7 +23,7 @@ Die Scripts gehören in ein Verzeichnis: Die ISO-Builder nehmen den Installer un
 ## Funktionen
 
 - Natives ZFS-Root, Layout `root/ROOT/<name>`, `root/var`, `root/var/log`, `root/var/tmp`, `root/tmp`
-- Optional eigener **Boot-Pool** (`compatibility=grub2`, über alle Platten gespiegelt), Root-Pool mit allen Features, zstd, `dnodesize=auto`
+- Optional eigener **Boot-Pool** (`compatibility=grub2`, über alle Platten gespiegelt), Root-Pool mit allen Features, zstd oder lz4 (`--compression`), `dnodesize=auto`
 - RAID-Level: single/raid0, Mirror, raidz, raidz2, raidz3
 - BIOS und EFI, **Secure Boot** (shim-signed, signiertes GRUB, MOK für DKMS) unter Debian Trixie
 - Swap als Partition, ZVOL oder keiner, optional zram
