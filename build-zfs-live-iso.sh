@@ -367,8 +367,13 @@ mkdir -p config/hooks/normal
 cat >config/hooks/normal/9100-toram-menu.hook.binary <<'TORAMEOF'
 #!/bin/sh
 set -e
-GRUBCFG=binary/boot/grub/grub.cfg
-LIVECFG=binary/isolinux/live.cfg
+# live-build startet Binary-Hooks im Verzeichnis binary/
+GRUBCFG=boot/grub/grub.cfg
+LIVECFG=isolinux/live.cfg
+if [ ! -f "$GRUBCFG" ] && [ ! -f "$LIVECFG" ]; then
+	echo "toram-Hook: weder $GRUBCFG noch $LIVECFG gefunden (Verzeichnis: $(pwd))" >&2
+	exit 1
+fi
 
 if [ -f "$GRUBCFG" ]; then
 	awk '
