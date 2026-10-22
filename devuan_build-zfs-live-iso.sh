@@ -345,6 +345,11 @@ menuentry "Devuan ZFS Live (ohne quiet)" {
 	linux /live/vmlinuz boot=live components locales=de_DE.UTF-8 keyboard-layouts=de timezone=Europe/Berlin
 	initrd /live/initrd.img
 }
+
+menuentry "Devuan ZFS Live (im RAM, Medium kann entfernt werden)" {
+	linux /live/vmlinuz boot=live components locales=de_DE.UTF-8 keyboard-layouts=de timezone=Europe/Berlin quiet toram
+	initrd /live/initrd.img
+}
 GRUBEOF
 if [ "$ARCH" = arm64 ]; then
 	# VMs und Boards ohne Grafik: zusaetzlich seriell (ttyAMA0)

@@ -360,6 +360,69 @@ case $- in
 esac
 PROFEOF
 
+# Zusaetzlicher Menueeintrag "im RAM" (live-boot: toram). Der Hook laeuft nach der Erzeugung
+# von grub.cfg und live.cfg und dupliziert dort den ersten Live-Eintrag mit "toram".
+# Das squashfs wird dann komplett in den RAM kopiert, das Medium kann danach entfernt werden.
+mkdir -p config/hooks/normal
+cat >config/hooks/normal/9100-toram-menu.hook.binary <<'TORAMEOF'
+#!/bin/sh
+set -e
+GRUBCFG=binary/boot/grub/grub.cfg
+LIVECFG=binary/isolinux/live.cfg
+
+if [ -f "$GRUBCFG" ]; then
+	awk '
+	/^menuentry / && !done && /Live system/ && !/fail-safe/ { inblk = 1 }
+	{ print }
+	inblk { buf = buf $0 "\n" }
+	inblk && /^}/ {
+		inblk = 0
+		done = 1
+		n = split(buf, L, "\n")
+		for (i = 1; i < n; i++) {
+			line = L[i]
+			if (line ~ /^menuentry /) {
+				match(line, /"[^"]*"/)
+				lbl = substr(line, RSTART + 1, RLENGTH - 2)
+				sub(/"[^"]*"/, "\"" lbl " - im RAM (toram)\"", line)
+				sub(/ --hotkey=[a-z]/, "", line)
+			} else if (line ~ /^[ \t]*linux[ \t]/) {
+				line = line " toram"
+			}
+			print line
+		}
+		print ""
+	}' "$GRUBCFG" >"$GRUBCFG.neu"
+	grep -q toram "$GRUBCFG.neu" || { echo "toram-Eintrag fuer GRUB nicht erzeugt" >&2; exit 1; }
+	mv "$GRUBCFG.neu" "$GRUBCFG"
+fi
+
+if [ -f "$LIVECFG" ]; then
+	awk '
+	/^label / && !done && !/failsafe/ { inblk = 1 }
+	inblk && /^$/ { inblk = 0; done = 1; emit = 1 }
+	inblk { buf = buf $0 "\n" }
+	{ print }
+	END { if (inblk) emit = 1 }
+	emit {
+		n = split(buf, L, "\n")
+		for (i = 1; i < n; i++) {
+			line = L[i]
+			if (line ~ /^label /) line = line "-toram"
+			else if (line ~ /menu label/) { sub(/\^/, "", line); line = line " - im RAM (toram)" }
+			else if (line ~ /menu default/) continue
+			else if (line ~ /^[ \t]*append[ \t]/) line = line " toram"
+			print line
+		}
+		print ""
+		emit = 0
+	}' "$LIVECFG" >"$LIVECFG.neu"
+	grep -q toram "$LIVECFG.neu" || { echo "toram-Eintrag fuer syslinux nicht erzeugt" >&2; exit 1; }
+	mv "$LIVECFG.neu" "$LIVECFG"
+fi
+TORAMEOF
+chmod +x config/hooks/normal/9100-toram-menu.hook.binary
+
 # Pruefung: ist das ZFS-Modul wirklich gebaut worden?
 mkdir -p config/hooks/normal
 cat >config/hooks/normal/9000-check-zfs.hook.chroot <<'EOF'
