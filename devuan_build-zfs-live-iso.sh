@@ -3,7 +3,7 @@
 # devuan_build-zfs-live-iso.sh
 #
 # Baut ein Devuan-Live-ISO (sysvinit, Standard: 6.0 "excalibur") mit vorgebautem ZFS-Modul
-# (zfs-dkms) und dem Installer devuan_debian-zfs-root.sh. Getestet: Excalibur (amd64, VM); Daedalus und Ceres ungetestet.
+# (zfs-dkms) und dem Installer devuan_debian-zfs-root.sh. Getestet (VM): Excalibur, Daedalus; Ceres ungetestet. Kein Secure Boot.
 #
 # Unterschiede zum Debian-Bauskript (build-zfs-live-iso.sh):
 #  - Devuan baut unter Devuan, kein Cross-Build.

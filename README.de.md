@@ -84,7 +84,9 @@ Hinweise:
 | Secure Boot (shim, signiertes GRUB, MOK) | funktioniert unter **Trixie**; unter Bookworm nicht (Ursache nicht geklärt) |
 | Debian Forky | ungetestet (zfs-dkms 2.4 gegen Kernel 7.x könnte Probleme machen) |
 | Devuan Excalibur Installation + ISO | in einer VM getestet |
-| Devuan Daedalus / Ceres | ungetestet |
+| Devuan Daedalus Installation + ISO | in einer VM getestet |
+| Devuan Ceres | ungetestet |
+| Secure Boot unter Devuan | nicht unterstützt |
 | `zfs-rollback-system` | in VM und auf echter Hardware (BIOS) getestet; EFI-Zweig ungetestet |
 | `zfs-chroot-system` | kurz getestet |
 
