@@ -80,6 +80,16 @@ Hinweise:
 
 Beide Live-ISOs haben einen zusätzlichen Boot-Menüeintrag „... im RAM (toram)“. Er kopiert das ganze System-Image in den RAM (live-boot `toram`), danach lässt sich USB-Stick oder CD entfernen. Der RAM muss größer sein als das Image (etwa so groß wie das ISO, plus Arbeitsspeicher). Bei einem anderen ISO `toram` von Hand an die Kernel-Zeile hängen.
 
+## Secure Boot mit dem Live-ISO (Trixie / Forky)
+
+Das Debian-Live-ISO enthält `shim-signed` und `mokutil` (auch unter Bookworm, dort bleibt die signierte Bootkette aus). Wird es für Trixie oder neuer gebaut, nimmt live-build shim und das von Debian signierte GRUB, und das ISO legt den MokManager dazu, damit ein Schlüssel eingetragen werden kann. Das ZFS-Modul baut DKMS und signiert es mit dem DKMS-Schlüssel, dem noch nicht vertraut wird. Einmal pro Rechner eintragen:
+
+```
+mokutil --import /var/lib/dkms/mok.pub
+```
+
+Neu starten, im blauen MOK-Manager „Enroll MOK“ bestätigen (Passwort vom Import), danach das ISO erneut starten. Der Schlüssel entsteht bei jedem ISO-Bau neu; der private Teil wird aus dem Image entfernt. Ein neu gebautes ISO braucht also einen neuen Eintrag. Devuan-ISOs sind nicht betroffen (kein Secure Boot).
+
 ## Teststatus
 
 | Bereich | Status |
@@ -93,6 +103,7 @@ Beide Live-ISOs haben einen zusätzlichen Boot-Menüeintrag „... im RAM (toram
 | Secure Boot unter Devuan | nicht unterstützt |
 | `zfs-rollback-system` | in VM und auf echter Hardware (BIOS) getestet; EFI-Zweig ungetestet |
 | `zfs-chroot-system` | kurz getestet |
+| Debian-Live-ISO mit Secure Boot (shim, MokManager, signiertes ZFS-Modul) | ungetestet (Hook nur gegen Dummy-Dateien geprüft; braucht eine VM mit Secure Boot) |
 | ISO-Menüeintrag „im RAM (toram)“ | ungetestet (Debian: Binary-Hook nur gegen nachgebaute Konfigdateien geprüft; Devuan: einfacher GRUB-Eintrag) |
 
 ## Hinweis Proxmox / Secure Boot

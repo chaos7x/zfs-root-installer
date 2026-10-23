@@ -679,6 +679,9 @@ if ! modprobe zfs; then
 		echo "Secure Boot ist aktiv: das ZFS-Modul des Live-Systems ist mit keinem eingetragenen" >&2
 		echo "Schluessel signiert. Secure Boot in der Firmware/VM ausschalten und neu starten" >&2
 		echo "(das Zielsystem kann danach mit --secureboot yes wieder Secure-Boot-faehig werden)." >&2
+		echo "Oder, falls dieses ISO ein signiertes Modul enthaelt: Schluessel eintragen mit" >&2
+		echo "  mokutil --import /var/lib/dkms/mok.pub" >&2
+		echo "neu starten und im blauen MOK-Manager 'Enroll MOK' bestaetigen." >&2
 	fi
 	exit 1
 fi
