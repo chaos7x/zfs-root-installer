@@ -212,7 +212,7 @@ run_chroot apt-get install --yes \
 	linux-image-$ARCH linux-headers-$ARCH \
 	live-boot live-boot-initramfs-tools live-config live-config-sysvinit \
 	debootstrap gdisk dosfstools whiptail rsync mdadm lvm2 btrfs-progs parted \
-	openssh-server sudo console-setup keyboard-configuration kbd less htop mc smartmontools cryptsetup gddrescue zstd \
+	openssh-server sudo console-setup keyboard-configuration kbd less htop mc smartmontools cryptsetup gddrescue zstd eject \
 	ifupdown isc-dhcp-client iproute2 iputils-ping grub-common psmisc
 
 echo "=== 4. ZFS (dkms baut das Modul) ==="

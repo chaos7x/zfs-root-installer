@@ -279,6 +279,7 @@ smartmontools
 cryptsetup
 gddrescue
 zstd
+eject
 shim-signed
 mokutil
 EOF
