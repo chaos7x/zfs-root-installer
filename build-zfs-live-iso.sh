@@ -121,6 +121,14 @@ if [ ! -f "$INSTALLER" ]; then
 	exit 1
 fi
 
+# Secure Boot (shim + von Debian signiertes GRUB): unter Bookworm gibt es kein signiertes
+# GRUB 2.12 (die Backports liefern keins), dort bleibt es aus. Sonst nimmt live-build die
+# signierten Pakete, wenn sie da sind (auto), und baut sonst ohne weiter.
+case "$DIST" in
+bookworm) SBMODE=disable ;;
+*) SBMODE=auto ;;
+esac
+
 case "$ARCH" in
 arm64)
 	FLAVOUR=arm64
@@ -139,6 +147,10 @@ esac
 if ! command -v lb >/dev/null; then
 	apt-get update
 	apt-get install --yes live-build debootstrap xorriso squashfs-tools
+fi
+# mtools und dosfstools braucht der Hook, der das EFI-Image um MokManager erweitert
+if ! command -v mcopy >/dev/null || ! command -v mkfs.msdos >/dev/null; then
+	apt-get install --yes mtools dosfstools
 fi
 echo "lb: $(command -v lb)"
 lb --version || true
@@ -220,6 +232,7 @@ lb config \
 	--mirror-chroot "$MIRROR" \
 	--mirror-binary "$MIRROR" \
 	--bootloaders "$BOOTLOADERS" \
+	--uefi-secure-boot "$SBMODE" \
 	--binary-images iso-hybrid \
 	--debian-installer none \
 	--firmware-chroot false \
@@ -267,6 +280,8 @@ cryptsetup
 gddrescue
 zstd
 eject
+shim-signed
+mokutil
 EOF
 
 # Bookworm: zfs-dkms, zfsutils-linux und grub-common aus den Backports (Hook nach den
@@ -441,8 +456,63 @@ if ! find /lib/modules -name 'zfs.ko*' | grep -q .; then
 	exit 1
 fi
 echo "== ZFS-Modul vorhanden =="
+# Secure Boot: das Modul ist nur ladbar, wenn es mit einem eingetragenen Schluessel signiert
+# ist. dkms signiert mit /var/lib/dkms/mok.key, der oeffentliche Teil ist mok.pub. Nur Hinweis,
+# kein Abbruch (ohne Secure Boot ist ein unsigniertes Modul unproblematisch).
+ZFSKO=$(find /lib/modules -name 'zfs.ko*' | head -n1)
+SIGNER=$(modinfo -F signer "$ZFSKO" 2>/dev/null || true)
+if [ -n "$SIGNER" ] && [ -f /var/lib/dkms/mok.pub ]; then
+	echo "== ZFS-Modul signiert von: $SIGNER =="
+else
+	echo "HINWEIS: ZFS-Modul ist nicht signiert (oder mok.pub fehlt): unter Secure Boot nicht ladbar" >&2
+fi
 EOF
 chmod +x config/hooks/normal/9000-check-zfs.hook.chroot
+
+# Den privaten dkms-Schluessel nicht mit ins Image geben: wer das ISO hat, koennte sonst Module
+# signieren, denen ein Rechner mit eingetragenem Schluessel vertraut. mok.pub bleibt fuer
+# "mokutil --import /var/lib/dkms/mok.pub" im Live-System.
+cat >config/hooks/normal/9050-remove-mok-key.hook.chroot <<'EOF'
+#!/bin/sh
+rm -f /var/lib/dkms/mok.key
+EOF
+chmod +x config/hooks/normal/9050-remove-mok-key.hook.chroot
+
+# Secure Boot: live-build legt nur shim und GRUB auf das EFI-Image. MokManager (mm) und
+# Fallback (fb) fehlen, dann meldet shim "MokManager is missing", sobald ein Schluessel per
+# mokutil eingetragen werden soll. Der Hook legt sie nach EFI/boot und baut efi.img neu (die
+# Groesse ist von live-build knapp bemessen, mcopy ins vorhandene Image wuerde nicht passen).
+# Er tut nichts, wenn live-build ohne signiertes GRUB gebaut hat (kein grub<arch>.efi).
+cat >config/hooks/normal/9060-efi-mokmanager.hook.binary <<'MOKEOF'
+#!/bin/sh
+set -e
+# live-build startet Binary-Hooks im Verzeichnis binary/
+EFIIMG=boot/grub/efi.img
+for S in x64 aa64; do
+	[ -f EFI/boot/grub$S.efi ] || continue
+	echo "Secure-Boot-Image ($S): ergaenze MokManager und Fallback"
+	for H in mm fb; do
+		SRC=../chroot/usr/lib/shim/$H$S.efi.signed
+		if [ -f "$SRC" ]; then
+			cp -v "$SRC" EFI/boot/$H$S.efi
+		else
+			echo "WARNUNG: $SRC fehlt" >&2
+		fi
+	done
+	TMP=$(mktemp -d)
+	mcopy -i "$EFIIMG" ::boot/grub/grub.cfg "$TMP/grub.cfg"
+	SIZE=$(cat EFI/boot/*.efi "$TMP/grub.cfg" | wc -c)
+	BLOCKS=$(( (SIZE / 1024 + 256) / 32 * 32 ))
+	rm -f "$EFIIMG"
+	mkfs.msdos -C "$EFIIMG" "$BLOCKS" -i "$(printf '%08x' "$(( ${SOURCE_DATE_EPOCH:-$(date +%s)} % 4294967296 ))")" >/dev/null
+	mmd -i "$EFIIMG" ::EFI ::EFI/boot ::boot ::boot/grub
+	mcopy -m -o -i "$EFIIMG" EFI/boot/*.efi ::EFI/boot
+	mcopy -m -o -i "$EFIIMG" "$TMP/grub.cfg" ::boot/grub
+	rm -rf "$TMP"
+	mdir -i "$EFIIMG" ::EFI/boot
+done
+MOKEOF
+chmod +x config/hooks/normal/9060-efi-mokmanager.hook.binary
 
 lb build 2>&1 | tee build.log
 
