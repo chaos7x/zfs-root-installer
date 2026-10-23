@@ -266,6 +266,7 @@ smartmontools
 cryptsetup
 gddrescue
 zstd
+eject
 EOF
 
 # Bookworm: zfs-dkms, zfsutils-linux und grub-common aus den Backports (Hook nach den
