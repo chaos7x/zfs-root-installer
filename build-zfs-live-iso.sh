@@ -517,5 +517,26 @@ chmod +x config/hooks/normal/9060-efi-mokmanager.hook.binary
 lb build 2>&1 | tee build.log
 
 ls -lh ./*.iso
+
+# Netboot: Kernel, Initrd und squashfs einzeln (iPXE: kernel/initrd + live-boot fetch=)
+NETDIR=$WORKDIR/netboot
+rm -rf "$NETDIR"
+mkdir -p "$NETDIR"
+NETKERNEL=$(ls -1 binary/live/vmlinuz-* | sort -V | tail -n1)
+NETINITRD=$(ls -1 binary/live/initrd.img-* | sort -V | tail -n1)
+cp -v "$NETKERNEL" "$NETDIR/vmlinuz"
+cp -v "$NETINITRD" "$NETDIR/initrd.img"
+cp -v binary/live/filesystem.squashfs "$NETDIR/"
+cat >"$NETDIR/boot.ipxe" <<'IPXEEOF'
+#!ipxe
+# Adresse des Webservers anpassen, auf dem dieser Ordner liegt
+set base http://SERVER/netboot
+dhcp
+kernel ${base}/vmlinuz boot=live components ip=dhcp fetch=${base}/filesystem.squashfs locales=de_DE.UTF-8 keyboard-layouts=de timezone=Europe/Berlin
+initrd ${base}/initrd.img
+boot
+IPXEEOF
+echo "Netboot-Dateien (iPXE, live-boot fetch=): $NETDIR"
+ls -lh "$NETDIR"
 echo
 echo "Fertig. Im gebooteten Live-System: sudo -i; debian-zfs-root"

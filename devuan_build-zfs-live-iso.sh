@@ -365,6 +365,23 @@ fi
 grub-mkrescue -o "$ISO" "$IMAGE" -- -volid DEVUAN_ZFS_LIVE
 
 ls -lh "$ISO"
+
+# Netboot: Kernel, Initrd und squashfs einzeln (iPXE: kernel/initrd + live-boot fetch=)
+NETDIR=$WORKDIR/netboot
+rm -rf "$NETDIR"
+mkdir -p "$NETDIR"
+cp -v "$IMAGE/live/vmlinuz" "$IMAGE/live/initrd.img" "$IMAGE/live/filesystem.squashfs" "$NETDIR/"
+cat >"$NETDIR/boot.ipxe" <<'IPXEEOF'
+#!ipxe
+# Adresse des Webservers anpassen, auf dem dieser Ordner liegt
+set base http://SERVER/netboot
+dhcp
+kernel ${base}/vmlinuz boot=live components ip=dhcp fetch=${base}/filesystem.squashfs locales=de_DE.UTF-8 keyboard-layouts=de timezone=Europe/Berlin
+initrd ${base}/initrd.img
+boot
+IPXEEOF
+echo "Netboot-Dateien (iPXE, live-boot fetch=): $NETDIR"
+ls -lh "$NETDIR"
 echo
 echo "Fertig. Im gebooteten Live-System (Login: user / live oder root / live): sudo -i; debian-zfs-root"
 echo "Hinweis: Das ISO startet mit unsigniertem GRUB, Secure Boot in der VM fuer den Live-Start abschalten."
