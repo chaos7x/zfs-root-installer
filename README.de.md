@@ -90,6 +90,10 @@ mokutil --import /var/lib/dkms/mok.pub
 
 Neu starten, im blauen MOK-Manager „Enroll MOK“ bestätigen (Passwort vom Import), danach das ISO erneut starten. Der Schlüssel entsteht bei jedem ISO-Bau neu; der private Teil wird aus dem Image entfernt. Ein neu gebautes ISO braucht also einen neuen Eintrag. Devuan-ISOs sind nicht betroffen (kein Secure Boot).
 
+## Netzwerkstart (iPXE)
+
+Neben dem ISO schreiben beide Builder einen Ordner `netboot/` (im Arbeitsverzeichnis) mit `vmlinuz`, `initrd.img`, `filesystem.squashfs` und einem Beispiel `boot.ipxe`. Den Ordner auf einen Webserver legen und `SERVER` in `boot.ipxe` ersetzen. live-boot lädt das squashfs per `fetch=` in den RAM; der Rechner braucht also mehr RAM als das squashfs. Das ISO selbst per iPXE-`sanboot` zu starten ist bei Linux-Live-Systemen unzuverlässig, weil der Kernel das von iPXE bereitgestellte Laufwerk nicht sieht.
+
 ## Teststatus
 
 | Bereich | Status |
@@ -103,6 +107,7 @@ Neu starten, im blauen MOK-Manager „Enroll MOK“ bestätigen (Passwort vom Im
 | Secure Boot unter Devuan | nicht unterstützt |
 | `zfs-rollback-system` | in VM und auf echter Hardware (BIOS) getestet; EFI-Zweig ungetestet |
 | `zfs-chroot-system` | kurz getestet |
+| iPXE-Netzwerkstart (`netboot/`) | ungetestet |
 | Debian-Live-ISO mit Secure Boot (shim, MokManager, signiertes ZFS-Modul) | ungetestet (Hook nur gegen Dummy-Dateien geprüft; braucht eine VM mit Secure Boot) |
 | ISO-Menüeintrag „im RAM (toram)“ | Debian Bookworm, BIOS (syslinux): getestet; Debian EFI (GRUB), Trixie und Devuan: ungetestet |
 
