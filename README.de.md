@@ -102,7 +102,7 @@ Neu starten, im blauen MOK-Manager „Enroll MOK“ bestätigen (Passwort vom Im
 
 ## Netzwerkstart (iPXE)
 
-Neben dem ISO schreiben beide Builder einen Ordner `netboot/` (im Arbeitsverzeichnis) mit `vmlinuz`, `initrd.img`, `filesystem.squashfs` und einem Beispiel `boot.ipxe`. Den Ordner auf einen Webserver legen und `SERVER` in `boot.ipxe` ersetzen. live-boot lädt das squashfs per `fetch=` in den RAM; der Rechner braucht also mehr RAM als das squashfs. Das ISO selbst per iPXE-`sanboot` zu starten ist bei Linux-Live-Systemen unzuverlässig, weil der Kernel das von iPXE bereitgestellte Laufwerk nicht sieht.
+Neben dem ISO schreiben beide Builder einen Ordner `netboot-<Release>-<Arch>/` (im Arbeitsverzeichnis, z. B. `netboot-bookworm-amd64/`) mit `vmlinuz`, `initrd.img`, `filesystem.squashfs` und einem Beispiel `boot.ipxe`. Den Ordner auf einen Webserver legen und `SERVER` in `boot.ipxe` ersetzen. live-boot lädt das squashfs per `fetch=` in den RAM; der Rechner braucht also mehr RAM als das squashfs. Das ISO selbst per iPXE-`sanboot` zu starten ist bei Linux-Live-Systemen unzuverlässig, weil der Kernel das von iPXE bereitgestellte Laufwerk nicht sieht.
 
 ## Teststatus
 
@@ -118,7 +118,7 @@ Neben dem ISO schreiben beide Builder einen Ordner `netboot/` (im Arbeitsverzeic
 | `zfs-rollback-system` | in VM und auf echter Hardware (BIOS) getestet; EFI-Zweig ungetestet |
 | `zfs-chroot-system` | kurz getestet |
 | `ZFS_BACKPORTS=yes` (Trixie-Live-ISO) | ungetestet |
-| iPXE-Netzwerkstart (`netboot/`) | ungetestet |
+| iPXE-Netzwerkstart (`netboot-<Release>-<Arch>/`) | ungetestet |
 | Debian-Live-ISO mit Secure Boot (shim, MokManager, signiertes ZFS-Modul) | ungetestet (Hook nur gegen Dummy-Dateien geprüft; braucht eine VM mit Secure Boot) |
 | ISO-Menüeintrag „im RAM (toram)“ | Debian Bookworm, BIOS (syslinux): getestet; Debian EFI (GRUB), Trixie und Devuan: ungetestet |
 

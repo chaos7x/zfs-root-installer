@@ -27,7 +27,7 @@ Aufruf: build-zfs-live-iso.sh -d RELEASE [OPTIONEN]
   -h, --help           Diese Hilfe
 
 Weitere Einstellungen per Umgebungsvariable:
-  WORKDIR    Arbeitsverzeichnis                           [./zfs-live-<arch>]
+  WORKDIR    Arbeitsverzeichnis                           [./zfs-live-<release>-<arch>]
   INSTALLER  Pfad zum Installer-Script                    [debian-zfs-root.sh neben diesem Script]
   ZFS_BACKPORTS  yes|no: ZFS (zfs-dkms, zfsutils-linux) aus <release>-backports   [bookworm: yes, sonst no]
 
@@ -114,7 +114,7 @@ fi
 ARCH=${ARCH:-$(dpkg --print-architecture)}
 HERE=$(dirname "$(readlink -f "$0")")
 INSTALLER=${INSTALLER:-$HERE/debian-zfs-root.sh}
-WORKDIR=${WORKDIR:-$PWD/zfs-live-$ARCH}
+WORKDIR=${WORKDIR:-$PWD/zfs-live-$DIST-$ARCH}
 MIRROR=${MIRROR:-http://deb.debian.org/debian/}
 
 if [ ! -f "$INSTALLER" ]; then
@@ -551,7 +551,7 @@ lb build 2>&1 | tee build.log
 ls -lh ./*.iso
 
 # Netboot: Kernel, Initrd und squashfs einzeln (iPXE: kernel/initrd + live-boot fetch=)
-NETDIR=$WORKDIR/netboot
+NETDIR=$WORKDIR/netboot-$DIST-$ARCH
 rm -rf "$NETDIR"
 mkdir -p "$NETDIR"
 NETKERNEL=$(ls -1 binary/live/vmlinuz-* | sort -V | tail -n1)
@@ -559,13 +559,13 @@ NETINITRD=$(ls -1 binary/live/initrd.img-* | sort -V | tail -n1)
 cp -v "$NETKERNEL" "$NETDIR/vmlinuz"
 cp -v "$NETINITRD" "$NETDIR/initrd.img"
 cp -v binary/live/filesystem.squashfs "$NETDIR/"
-cat >"$NETDIR/boot.ipxe" <<'IPXEEOF'
+cat >"$NETDIR/boot.ipxe" <<IPXEEOF
 #!ipxe
 # Adresse des Webservers anpassen, auf dem dieser Ordner liegt
-set base http://SERVER/netboot
+set base http://SERVER/netboot-$DIST-$ARCH
 dhcp
-kernel ${base}/vmlinuz boot=live components ip=dhcp fetch=${base}/filesystem.squashfs locales=de_DE.UTF-8 keyboard-layouts=de timezone=Europe/Berlin
-initrd ${base}/initrd.img
+kernel \${base}/vmlinuz boot=live components ip=dhcp fetch=\${base}/filesystem.squashfs locales=de_DE.UTF-8 keyboard-layouts=de timezone=Europe/Berlin
+initrd \${base}/initrd.img
 boot
 IPXEEOF
 echo "Netboot-Dateien (iPXE, live-boot fetch=): $NETDIR"
