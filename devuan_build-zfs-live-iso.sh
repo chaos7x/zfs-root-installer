@@ -19,7 +19,7 @@
 #  - der Bau dauert wegen dkms und squashfs (xz) eine Weile
 #
 # Aufruf:  sudo ./devuan_build-zfs-live-iso.sh -d excalibur
-# Ergebnis: $WORKDIR/devuan-zfs-live-<arch>.iso
+# Ergebnis: $WORKDIR/devuan-zfs-live-<release>-<arch>.iso
 #
 
 usage() {
@@ -31,7 +31,7 @@ Aufruf: devuan_build-zfs-live-iso.sh [OPTIONEN]
   -h, --help           Diese Hilfe
 
 Weitere Einstellungen per Umgebungsvariable:
-  WORKDIR    Arbeitsverzeichnis                           [./devuan-zfs-live]
+  WORKDIR    Arbeitsverzeichnis                           [./devuan-zfs-live-<release>-<arch>]
   INSTALLER  Pfad zum Installer-Script                    [devuan_debian-zfs-root.sh neben diesem Script]
 
 Beispiele:
@@ -115,7 +115,7 @@ esac
 
 HERE=$(dirname "$(readlink -f "$0")")
 INSTALLER=${INSTALLER:-$HERE/devuan_debian-zfs-root.sh}
-WORKDIR=${WORKDIR:-$PWD/devuan-zfs-live}
+WORKDIR=${WORKDIR:-$PWD/devuan-zfs-live-$DIST-$ARCH}
 MIRROR=${MIRROR:-http://deb.devuan.org/merged/}
 
 if [ ! -f "$INSTALLER" ]; then
@@ -146,7 +146,7 @@ mkdir -p "$WORKDIR"
 WORKDIR=$(readlink -f "$WORKDIR")
 CHROOT=$WORKDIR/chroot
 IMAGE=$WORKDIR/image
-ISO=$WORKDIR/devuan-zfs-live-$ARCH.iso
+ISO=$WORKDIR/devuan-zfs-live-$DIST-$ARCH.iso
 
 # Mounts unter dem Chroot loesen (auch Reste eines abgebrochenen Laufs)
 unmount_chroot() {
@@ -367,17 +367,17 @@ grub-mkrescue -o "$ISO" "$IMAGE" -- -volid DEVUAN_ZFS_LIVE
 ls -lh "$ISO"
 
 # Netboot: Kernel, Initrd und squashfs einzeln (iPXE: kernel/initrd + live-boot fetch=)
-NETDIR=$WORKDIR/netboot
+NETDIR=$WORKDIR/netboot-$DIST-$ARCH
 rm -rf "$NETDIR"
 mkdir -p "$NETDIR"
 cp -v "$IMAGE/live/vmlinuz" "$IMAGE/live/initrd.img" "$IMAGE/live/filesystem.squashfs" "$NETDIR/"
-cat >"$NETDIR/boot.ipxe" <<'IPXEEOF'
+cat >"$NETDIR/boot.ipxe" <<IPXEEOF
 #!ipxe
 # Adresse des Webservers anpassen, auf dem dieser Ordner liegt
-set base http://SERVER/netboot
+set base http://SERVER/netboot-$DIST-$ARCH
 dhcp
-kernel ${base}/vmlinuz boot=live components ip=dhcp fetch=${base}/filesystem.squashfs locales=de_DE.UTF-8 keyboard-layouts=de timezone=Europe/Berlin
-initrd ${base}/initrd.img
+kernel \${base}/vmlinuz boot=live components ip=dhcp fetch=\${base}/filesystem.squashfs locales=de_DE.UTF-8 keyboard-layouts=de timezone=Europe/Berlin
+initrd \${base}/initrd.img
 boot
 IPXEEOF
 echo "Netboot-Dateien (iPXE, live-boot fetch=): $NETDIR"
