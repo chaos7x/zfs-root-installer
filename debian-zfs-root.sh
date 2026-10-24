@@ -279,10 +279,20 @@ esac
 TARGETDIST=${TARGET_DIST:-${LIVEDIST:-bookworm}}
 MIRROR=${TARGET_MIRROR:-http://deb.debian.org/debian/}
 COMPONENTS=${TARGET_COMPONENTS:-main,contrib,non-free-firmware}
+# Stammt das ZFS des Live-Systems aus den Backports? (Backport-Versionen enthalten "~bpo".)
+# Dann soll das Ziel dasselbe bekommen, sonst legt der Installer Pools mit Features an, die ein
+# aelteres ZFS im Ziel spaeter nicht mehr importieren kann.
+LIVEBPO=0
+if dpkg-query -W -f='${Version}\n' zfs-dkms zfsutils-linux 2>/dev/null | grep -q '~bpo'; then
+	LIVEBPO=1
+fi
 # Bookworm: ZFS 2.3 und GRUB aus den Backports (passende Compat-Liste grub2 -> GRUB 2.12)
+# Sonst: Backports, wenn das Live-System ZFS aus den Backports hat und dasselbe Release installiert wird
 if [ -n "${TARGET_BACKPORTS:-}" ]; then
 	BACKPORTS=$TARGET_BACKPORTS
 elif [ "$TARGETDIST" = bookworm ]; then
+	BACKPORTS=1
+elif [ "$LIVEBPO" = 1 ] && [ "$TARGETDIST" = "$LIVEDIST" ]; then
 	BACKPORTS=1
 else
 	BACKPORTS=0
@@ -645,9 +655,23 @@ fi
 SBTXT=no
 if [ "$SECUREBOOT" = 1 ]; then SBTXT=shim; fi
 
+# Live-System hat ZFS aus den Backports, das Ziel bekommt es nicht: neuere Pool-Features koennten
+# das Ziel spaeter am Import hindern (Pools bekommen die Features der Live-ZFS-Version).
+# (Ein neueres Ziel-Release als das Live-System hat im Hauptarchiv mindestens dieselbe Version.)
+distrank() { case "$1" in bookworm) echo 1 ;; trixie) echo 2 ;; forky) echo 3 ;; *) echo 0 ;; esac; }
+if [ "$LIVEBPO" = 1 ] && [ "$BACKPORTS" = 0 ] && [ "$(distrank "$TARGETDIST")" -le "$(distrank "$LIVEDIST")" ]; then
+	echo "WARNUNG: Das Live-System nutzt ZFS aus den Backports, das Ziel ($TARGETDIST) bekommt ZFS aus dem Hauptarchiv." >&2
+	echo "  Neuere Pool-Features koennten das Ziel spaeter am Import hindern. Besser: --backports yes" >&2
+	echo "  oder --compat PROFIL (z.B. openzfs-2.3) mit passender Version im Ziel." >&2
+	if [ -z "$OPT_YES" ]; then
+		whiptail --backtitle "$0" --title "ZFS-Version" --defaultno \
+			--yesno "\nDas Live-System nutzt ZFS aus den Backports, das Ziel nicht.\n\nNeuere Pool-Features koennten das Ziel spaeter am Import hindern. Besser: Abbrechen und mit --backports yes neu starten.\n\nTrotzdem fortfahren?\n" 16 74 || exit 1
+	fi
+fi
+
 if [ -z "$OPT_YES" ]; then
 	whiptail --backtitle "$0" --title "Confirmation" \
-		--yesno "\nAre you sure to destroy ZFS pool '$ZPOOL' (if existing), wipe all data of disks '${DISKS[*]}' and create a RAID '$RAIDLEVEL' (boot mode: $BOOTMODE, pool features: ${COMPAT:-all}, compression: $RCOMP, swap: $SWAPMODE${SWAPPARTSIZE:+ $SWAPPARTSIZE}, zram: $ZRAM, ssh-server: $SSHSERVER, standard: $STANDARD, boot pool: ${BPOOL:-none}, secure boot: $SBTXT)?\n" 22 74 || exit 1
+		--yesno "\nAre you sure to destroy ZFS pool '$ZPOOL' (if existing), wipe all data of disks '${DISKS[*]}' and create a RAID '$RAIDLEVEL' (boot mode: $BOOTMODE, pool features: ${COMPAT:-all}, compression: $RCOMP, swap: $SWAPMODE${SWAPPARTSIZE:+ $SWAPPARTSIZE}, zram: $ZRAM, ssh-server: $SSHSERVER, standard: $STANDARD, boot pool: ${BPOOL:-none}, secure boot: $SBTXT, backports: $BACKPORTS)?\n" 22 74 || exit 1
 fi
 
 ### Start the real work
