@@ -787,7 +787,7 @@ PART)
 	SWAPFSTAB=${SWAPFSTAB%$'\n'}
 	;;
 ZVOL)
-	zfs create -V $SIZESWAP -b "$(getconf PAGESIZE)" -o primarycache=metadata -o com.sun:auto-snapshot=false -o logbias=throughput -o sync=always $ZPOOL/swap
+	zfs create -V $SIZESWAP -b "$(getconf PAGESIZE)" -o primarycache=metadata -o com.sun:auto-snapshot=false -o logbias=throughput -o sync=always -o compression=zle -o secondarycache=none $ZPOOL/swap
 	# sometimes needed to wait for /dev/zvol/$ZPOOL/swap to appear
 	sleep 2
 	mkswap -f /dev/zvol/$ZPOOL/swap
