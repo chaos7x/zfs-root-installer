@@ -29,6 +29,7 @@ Aufruf: build-zfs-live-iso.sh -d RELEASE [OPTIONEN]
 Weitere Einstellungen per Umgebungsvariable:
   WORKDIR    Arbeitsverzeichnis                           [./zfs-live-<arch>]
   INSTALLER  Pfad zum Installer-Script                    [debian-zfs-root.sh neben diesem Script]
+  ZFS_BACKPORTS  yes|no: ZFS (zfs-dkms, zfsutils-linux) aus <release>-backports   [bookworm: yes, sonst no]
 
 Beispiele:
   sudo ./build-zfs-live-iso.sh -d bookworm
@@ -128,6 +129,23 @@ case "$DIST" in
 bookworm) SBMODE=disable ;;
 *) SBMODE=auto ;;
 esac
+
+# ZFS aus den Backports: unter Bookworm Pflicht (ZFS 2.3, dazu GRUB 2.12, siehe unten). Unter
+# Trixie optional (ZFS_BACKPORTS=yes), z.B. sobald Forky stabil ist und die neuere ZFS-Version
+# in trixie-backports liegt. Bei Forky gibt es keine Backports.
+case "${ZFS_BACKPORTS:-auto}" in
+auto) if [ "$DIST" = bookworm ]; then ZFSBP=1; else ZFSBP=0; fi ;;
+yes | 1) ZFSBP=1 ;;
+no | 0) ZFSBP=0 ;;
+*)
+	echo "ZFS_BACKPORTS erwartet yes oder no" >&2
+	exit 1
+	;;
+esac
+if [ "$DIST" = forky ] && [ "$ZFSBP" = 1 ]; then
+	echo "Fuer forky gibt es keine Backports (ZFS_BACKPORTS=yes nicht moeglich)" >&2
+	exit 1
+fi
 
 case "$ARCH" in
 arm64)
@@ -244,9 +262,9 @@ lb config \
 # Bookworm: ZFS 2.3 und GRUB 2.12 aus den Backports. Ein Pinning ueber
 # /etc/apt/preferences.d griff beim Bau nicht; deshalb werden die Pakete unten
 # per Hook mit "apt-get install -t bookworm-backports" installiert.
-if [ "$DIST" = bookworm ]; then
+if [ "$ZFSBP" = 1 ]; then
 	mkdir -p config/archives
-	echo "deb $MIRROR bookworm-backports main contrib non-free-firmware" >config/archives/backports.list.chroot
+	echo "deb $MIRROR $DIST-backports main contrib non-free-firmware" >config/archives/backports.list.chroot
 fi
 
 # Pakete: Kernel, Headers und zfs-dkms zusammen, damit das Modul beim Bau kompiliert wird
@@ -286,7 +304,7 @@ EOF
 
 # Bookworm: zfs-dkms, zfsutils-linux und grub-common aus den Backports (Hook nach den
 # Paketlisten, Kernel und Headers sind dann schon installiert; dkms baut das Modul hier)
-if [ "$DIST" = bookworm ]; then
+if [ "$DIST" = bookworm ] && [ "$ZFSBP" = 1 ]; then
 	sed -i '/^zfs-dkms$/d;/^zfsutils-linux$/d;/^grub-common$/d' config/package-lists/zfs.list.chroot
 	mkdir -p config/hooks/normal
 	cat >config/hooks/normal/0100-zfs-backports.hook.chroot <<'HOOKEOF'
@@ -305,6 +323,20 @@ arm64) BOOTBIN="grub-efi-arm64-bin" ;;
 esac
 GRUBPKGS=$(dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' 'grub*' | awk '$1 == "ii" { print $2 }' | grep -v -e '-signed$' || true)
 apt-get install --yes -t bookworm-backports zfs-dkms zfsutils-linux grub-common grub2-common $BOOTBIN $GRUBPKGS
+HOOKEOF
+	chmod +x config/hooks/normal/0100-zfs-backports.hook.chroot
+fi
+
+# Trixie: nur ZFS aus trixie-backports (GRUB 2.12 und signiertes GRUB kommen schon aus Trixie)
+if [ "$DIST" = trixie ] && [ "$ZFSBP" = 1 ]; then
+	sed -i '/^zfs-dkms$/d;/^zfsutils-linux$/d' config/package-lists/zfs.list.chroot
+	mkdir -p config/hooks/normal
+	cat >config/hooks/normal/0100-zfs-backports.hook.chroot <<'HOOKEOF'
+#!/bin/sh
+set -e
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get install --yes -t trixie-backports zfs-dkms zfsutils-linux
 HOOKEOF
 	chmod +x config/hooks/normal/0100-zfs-backports.hook.chroot
 fi
