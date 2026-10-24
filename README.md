@@ -76,6 +76,16 @@ Notes:
 - Defaults in the scripts (`vor-trixie`, `root/ROOT/debian`, …) can be changed via environment variables, see the script headers.
 - The first boot after a rollback may need a one-time `zpool import -f root` in the initramfs (host ID of the live system).
 
+## Newer ZFS in the live ISO (backports)
+
+The Bookworm ISO always takes ZFS (and GRUB 2.12) from `bookworm-backports`. For Trixie you can do the same with `ZFS_BACKPORTS=yes`, for example once Forky is released and its ZFS version is in `trixie-backports`:
+
+```
+sudo ZFS_BACKPORTS=yes ./build-zfs-live-iso.sh -d trixie
+```
+
+Note: pools created by the installer in such a live system enable the features of the live system's ZFS version. Enabled but unused features do not block an import by an older ZFS, but the installed system should run the same ZFS version or newer (otherwise it cannot use the pool's newer features once they become active).
+
 ## Run from RAM
 
 Both live ISOs have an extra boot menu entry "... im RAM (toram)". It copies the whole system image into RAM (live-boot `toram`), so the USB stick or CD can be removed afterwards. The RAM must be larger than the image (about the size of the ISO, plus working space). With another ISO, add `toram` to the kernel command line by hand.
@@ -107,6 +117,7 @@ Besides the ISO, both builders write a folder `netboot/` (next to the ISO / in t
 | Secure Boot on Devuan | not supported |
 | `zfs-rollback-system` | tested in a VM and on real hardware (BIOS); EFI branch untested |
 | `zfs-chroot-system` | lightly tested |
+| `ZFS_BACKPORTS=yes` (Trixie live ISO) | untested |
 | iPXE network boot (`netboot/`) | untested |
 | Debian live ISO with Secure Boot (shim, MokManager, signed ZFS module) | untested (hook checked against dummy files only; needs a Secure Boot VM) |
 | ISO menu entry "im RAM (toram)" | Debian Bookworm, BIOS (syslinux): tested; Debian EFI (GRUB), Trixie and Devuan: untested |

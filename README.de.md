@@ -76,6 +76,16 @@ Hinweise:
 - Vorgaben in den Scripts (`vor-trixie`, `root/ROOT/debian`, …) lassen sich per Umgebungsvariable ändern, siehe Script-Köpfe.
 - Der erste Start nach einem Rollback kann einmalig ein `zpool import -f root` in der initramfs brauchen (Host-ID des Live-Systems).
 
+## Neueres ZFS im Live-ISO (Backports)
+
+Das Bookworm-ISO nimmt ZFS (und GRUB 2.12) immer aus `bookworm-backports`. Für Trixie geht das mit `ZFS_BACKPORTS=yes` genauso, zum Beispiel sobald Forky erschienen ist und dessen ZFS-Version in `trixie-backports` liegt:
+
+```
+sudo ZFS_BACKPORTS=yes ./build-zfs-live-iso.sh -d trixie
+```
+
+Hinweis: Pools, die der Installer in so einem Live-System anlegt, schalten die Features der ZFS-Version des Live-Systems ein. Eingeschaltete, aber unbenutzte Features hindern ein älteres ZFS nicht am Import. Das installierte System sollte aber dieselbe ZFS-Version oder eine neuere haben, sonst kann es die neueren Features des Pools nicht nutzen, sobald sie aktiv werden.
+
 ## Aus dem RAM starten
 
 Beide Live-ISOs haben einen zusätzlichen Boot-Menüeintrag „... im RAM (toram)“. Er kopiert das ganze System-Image in den RAM (live-boot `toram`), danach lässt sich USB-Stick oder CD entfernen. Der RAM muss größer sein als das Image (etwa so groß wie das ISO, plus Arbeitsspeicher). Bei einem anderen ISO `toram` von Hand an die Kernel-Zeile hängen.
@@ -107,6 +117,7 @@ Neben dem ISO schreiben beide Builder einen Ordner `netboot/` (im Arbeitsverzeic
 | Secure Boot unter Devuan | nicht unterstützt |
 | `zfs-rollback-system` | in VM und auf echter Hardware (BIOS) getestet; EFI-Zweig ungetestet |
 | `zfs-chroot-system` | kurz getestet |
+| `ZFS_BACKPORTS=yes` (Trixie-Live-ISO) | ungetestet |
 | iPXE-Netzwerkstart (`netboot/`) | ungetestet |
 | Debian-Live-ISO mit Secure Boot (shim, MokManager, signiertes ZFS-Modul) | ungetestet (Hook nur gegen Dummy-Dateien geprüft; braucht eine VM mit Secure Boot) |
 | ISO-Menüeintrag „im RAM (toram)“ | Debian Bookworm, BIOS (syslinux): getestet; Debian EFI (GRUB), Trixie und Devuan: ungetestet |
