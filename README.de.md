@@ -104,7 +104,7 @@ Neu starten, im blauen MOK-Manager „Enroll MOK“ bestätigen (Passwort vom Im
 | `zfs-rollback-system` | in VM und auf echter Hardware (BIOS) getestet; EFI-Zweig ungetestet |
 | `zfs-chroot-system` | kurz getestet |
 | Debian-Live-ISO mit Secure Boot (shim, MokManager, signiertes ZFS-Modul) | ungetestet (Hook nur gegen Dummy-Dateien geprüft; braucht eine VM mit Secure Boot) |
-| ISO-Menüeintrag „im RAM (toram)“ | ungetestet (Debian: Binary-Hook nur gegen nachgebaute Konfigdateien geprüft; Devuan: einfacher GRUB-Eintrag) |
+| ISO-Menüeintrag „im RAM (toram)“ | Debian Bookworm, BIOS (syslinux): getestet; Debian EFI (GRUB), Trixie und Devuan: ungetestet |
 
 ## Hinweis Proxmox / Secure Boot
 
