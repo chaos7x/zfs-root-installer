@@ -13,7 +13,7 @@
 #  - ca. 5 GB freier Platz, der Bau dauert wegen dkms eine Weile
 #
 # Aufruf:  sudo ./build-zfs-live-iso.sh --dist bookworm|trixie|forky    (kurz: -d)
-# Ergebnis: $WORKDIR/live-image-<arch>.hybrid.iso
+# Ergebnis: $WORKDIR/zfs-live-<release>-<arch>.iso
 #
 
 usage() {
@@ -548,7 +548,10 @@ chmod +x config/hooks/normal/9060-efi-mokmanager.hook.binary
 
 lb build 2>&1 | tee build.log
 
-ls -lh ./*.iso
+# live-build nennt das ISO live-image-<arch>.hybrid.iso; mit Release im Namen ist es eindeutig
+ISO=$WORKDIR/zfs-live-$DIST-$ARCH.iso
+mv -v ./live-image-*.hybrid.iso "$ISO"
+ls -lh "$ISO"
 
 # Netboot: Kernel, Initrd und squashfs einzeln (iPXE: kernel/initrd + live-boot fetch=)
 NETDIR=$WORKDIR/netboot-$DIST-$ARCH
