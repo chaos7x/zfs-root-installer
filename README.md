@@ -100,7 +100,7 @@ Besides the ISO, both builders write a folder `netboot/` (next to the ISO / in t
 |---|---|
 | Debian Bookworm / Trixie install, BIOS and EFI | tested (Proxmox VM, VMware Fusion arm64, real hardware) |
 | Secure Boot (shim, signed GRUB, MOK) | works on **Trixie**; fails on Bookworm (cause not verified) |
-| Debian Forky | untested (zfs-dkms 2.4 vs. kernel 7.x may be a problem) |
+| Debian Forky | upgrade of an installed Trixie system works (kernel 7.2 + zfs-dkms, real hardware); fresh install and live ISO on Forky untested |
 | Devuan Excalibur install + ISO | tested in a VM |
 | Devuan Daedalus install + ISO | tested in a VM |
 | Devuan Ceres | untested |
