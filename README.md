@@ -102,7 +102,7 @@ Reboot, confirm "Enroll MOK" in the blue MOK manager (password from the import),
 
 ## Network boot (iPXE)
 
-Besides the ISO, both builders write a folder `netboot-<release>-<arch>/` (in the work directory, e.g. `netboot-bookworm-amd64/`) with `vmlinuz`, `initrd.img`, `filesystem.squashfs` and an example `boot.ipxe`. Put the folder on a web server and replace `SERVER` in `boot.ipxe`. live-boot downloads the squashfs into RAM (`fetch=`), so the machine needs more RAM than the squashfs. Booting the ISO itself with iPXE `sanboot` is unreliable for Linux live systems, because the kernel cannot see the drive iPXE provides.
+Besides the ISO, both builders write a folder `netboot-<release>-<arch>/` (in the work directory, e.g. `netboot-bookworm-amd64/`) with `vmlinuz`, `initrd.img`, `filesystem.squashfs` and an example `boot.ipxe`. Everything is also packed into an uncompressed `netboot-<release>-<arch>.tar` (squashfs and kernel are already compressed). Put the folder on a web server and replace `SERVER` in `boot.ipxe`. live-boot downloads the squashfs into RAM (`fetch=`), so the machine needs more RAM than the squashfs. Booting the ISO itself with iPXE `sanboot` is unreliable for Linux live systems, because the kernel cannot see the drive iPXE provides.
 
 ## Test status
 

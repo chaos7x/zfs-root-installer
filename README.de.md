@@ -102,7 +102,7 @@ Neu starten, im blauen MOK-Manager „Enroll MOK“ bestätigen (Passwort vom Im
 
 ## Netzwerkstart (iPXE)
 
-Neben dem ISO schreiben beide Builder einen Ordner `netboot-<Release>-<Arch>/` (im Arbeitsverzeichnis, z. B. `netboot-bookworm-amd64/`) mit `vmlinuz`, `initrd.img`, `filesystem.squashfs` und einem Beispiel `boot.ipxe`. Den Ordner auf einen Webserver legen und `SERVER` in `boot.ipxe` ersetzen. live-boot lädt das squashfs per `fetch=` in den RAM; der Rechner braucht also mehr RAM als das squashfs. Das ISO selbst per iPXE-`sanboot` zu starten ist bei Linux-Live-Systemen unzuverlässig, weil der Kernel das von iPXE bereitgestellte Laufwerk nicht sieht.
+Neben dem ISO schreiben beide Builder einen Ordner `netboot-<Release>-<Arch>/` (im Arbeitsverzeichnis, z. B. `netboot-bookworm-amd64/`) mit `vmlinuz`, `initrd.img`, `filesystem.squashfs` und einem Beispiel `boot.ipxe`. Alles liegt zusätzlich in einem unkomprimierten `netboot-<Release>-<Arch>.tar` (squashfs und Kernel sind schon komprimiert). Den Ordner auf einen Webserver legen und `SERVER` in `boot.ipxe` ersetzen. live-boot lädt das squashfs per `fetch=` in den RAM; der Rechner braucht also mehr RAM als das squashfs. Das ISO selbst per iPXE-`sanboot` zu starten ist bei Linux-Live-Systemen unzuverlässig, weil der Kernel das von iPXE bereitgestellte Laufwerk nicht sieht.
 
 ## Teststatus
 

@@ -380,8 +380,11 @@ kernel \${base}/vmlinuz boot=live components ip=dhcp fetch=\${base}/filesystem.s
 initrd \${base}/initrd.img
 boot
 IPXEEOF
+# Alles in einem unkomprimierten tar (squashfs und Kernel sind schon komprimiert)
+tar -C "$WORKDIR" -cf "$NETDIR.tar" "$(basename "$NETDIR")"
 echo "Netboot-Dateien (iPXE, live-boot fetch=): $NETDIR"
 ls -lh "$NETDIR"
+ls -lh "$NETDIR.tar"
 echo
 echo "Fertig. Im gebooteten Live-System (Login: user / live oder root / live): sudo -i; debian-zfs-root"
 echo "Hinweis: Das ISO startet mit unsigniertem GRUB, Secure Boot in der VM fuer den Live-Start abschalten."
