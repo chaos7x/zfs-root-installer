@@ -10,6 +10,7 @@
 #    am besten in einem Bookworm-System. Ein aelteres live-build (z.B. aus Bullseye)
 #    kennt das Bookworm-Layout (security-Repo, non-free-firmware) teils nicht.
 #  - Netzwerk (Pakete kommen von deb.debian.org)
+#  - Auf Ubuntu laeuft der Bau nativ; das Script holt dort Debians live-build nach (siehe unten).
 #  - ca. 5 GB freier Platz, der Bau dauert wegen dkms eine Weile
 #
 # Aufruf:  sudo ./build-zfs-live-iso.sh --dist bookworm|trixie|forky    (kurz: -d)
@@ -162,9 +163,37 @@ amd64)
 	;;
 esac
 
+# live-build muss Debians Version sein (neue Syntax: --bootloaders, --uefi-secure-boot, ...).
+# Ubuntu liefert unter dem Namen live-build einen alten Eigenbau (3.0~a57). Dort wird das
+# architekturunabhaengige Paket aus dem Debian-Archiv installiert (ersetzt Ubuntus Paket).
+HOSTID=$(. /etc/os-release 2>/dev/null; echo "${ID:-}")
+lb_is_debian() {
+	command -v lb >/dev/null && lb --version 2>/dev/null | head -n1 | grep -Eq '^([0-9]+:)?[0-9]{8}'
+}
 if ! command -v lb >/dev/null; then
 	apt-get update
-	apt-get install --yes live-build debootstrap xorriso squashfs-tools
+	apt-get install --yes debootstrap xorriso squashfs-tools
+	[ "$HOSTID" = ubuntu ] || apt-get install --yes live-build
+fi
+if ! lb_is_debian; then
+	echo "live-build ist nicht die Debian-Version, hole sie aus dem Debian-Archiv ($DIST)"
+	apt-get install --yes curl xz-utils
+	LBTMP=$(mktemp -d)
+	LBMIRROR=${MIRROR%/}/
+	curl -fsSL "${LBMIRROR}dists/$DIST/main/binary-all/Packages.xz" | xz -dc >"$LBTMP/Packages"
+	LBFILE=$(awk -v RS= -F'\n' '$1 == "Package: live-build" { for (i = 1; i <= NF; i++) if ($i ~ /^Filename: /) { sub(/^Filename: /, "", $i); print $i } }' "$LBTMP/Packages")
+	if [ -z "$LBFILE" ]; then
+		echo "live-build steht nicht in ${LBMIRROR}dists/$DIST/main/binary-all/Packages.xz" >&2
+		exit 1
+	fi
+	curl -fsSL -o "$LBTMP/live-build.deb" "${LBMIRROR}${LBFILE}"
+	apt-get install --yes "$LBTMP/live-build.deb"
+	rm -rf "$LBTMP"
+	hash -r
+	if ! lb_is_debian; then
+		echo "Die Debian-Version von live-build liess sich nicht installieren." >&2
+		exit 1
+	fi
 fi
 # mtools und dosfstools braucht der Hook, der das EFI-Image um MokManager erweitert
 if ! command -v mcopy >/dev/null || ! command -v mkfs.msdos >/dev/null; then
