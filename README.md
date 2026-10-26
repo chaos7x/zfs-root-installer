@@ -86,7 +86,10 @@ sudo ZFS_BACKPORTS=yes ./build-zfs-live-iso.sh -d trixie
 
 Note: pools created by the installer in such a live system enable the features of the live system's ZFS version. Enabled but unused features do not block an import by an older ZFS, but the installed system should run the same ZFS version or newer (otherwise it cannot use the pool's newer features once they become active).
 
-## Run from RAM
+## Ubuntu as live system (untested)
+
+`debian-zfs-root` also accepts an Ubuntu live system (Desktop or Server live ISO) as the environment. The target is still a Debian system, so `--dist bookworm|trixie|forky` is mandatory. The installer pulls `debian-archive-keyring` for `debootstrap`. Pools get the features of the live system's ZFS; if the target's ZFS is older, limit them with `--compat openzfs-2.x`. Ubuntu's own server installer has no ZFS option (tested on arm64, 22.04 to 26.04), and there is no Ubuntu live ISO builder yet.
+
 
 Both live ISOs have an extra boot menu entry "... im RAM (toram)". It copies the whole system image into RAM (live-boot `toram`), so the USB stick or CD can be removed afterwards. The RAM must be larger than the image (about the size of the ISO, plus working space). With another ISO, add `toram` to the kernel command line by hand.
 
@@ -122,6 +125,7 @@ Besides the ISO, both builders write a folder `netboot-<release>-<arch>/` (in th
 | ISO build on an Ubuntu host (Debian `live-build` fetched automatically) | untested |
 | `zfs-rollback-system` | tested in a VM and on real hardware (BIOS); EFI branch untested |
 | `zfs-chroot-system` | lightly tested |
+| Ubuntu live system as installer environment | untested |
 | `ZFS_BACKPORTS=yes` (Trixie live ISO) | untested |
 | iPXE network boot (`netboot-<release>-<arch>/`) | untested |
 | Debian live ISO with Secure Boot (shim, MokManager, signed ZFS module) | untested (hook checked against dummy files only; needs a Secure Boot VM) |

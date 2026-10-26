@@ -86,7 +86,10 @@ sudo ZFS_BACKPORTS=yes ./build-zfs-live-iso.sh -d trixie
 
 Hinweis: Pools, die der Installer in so einem Live-System anlegt, schalten die Features der ZFS-Version des Live-Systems ein. Eingeschaltete, aber unbenutzte Features hindern ein älteres ZFS nicht am Import. Das installierte System sollte aber dieselbe ZFS-Version oder eine neuere haben, sonst kann es die neueren Features des Pools nicht nutzen, sobald sie aktiv werden.
 
-## Aus dem RAM starten
+## Ubuntu als Live-System (ungetestet)
+
+`debian-zfs-root` akzeptiert auch ein Ubuntu-Live-System (Desktop oder Server) als Umgebung. Das Ziel bleibt ein Debian-System, deshalb ist `--dist bookworm|trixie|forky` Pflicht. Für `debootstrap` installiert der Installer `debian-archive-keyring` nach. Die Pools bekommen die Features der ZFS-Version des Live-Systems; ist das ZFS im Ziel älter, begrenzt man sie mit `--compat openzfs-2.x`. Der Server-Installer von Ubuntu hat keine ZFS-Option (getestet auf arm64, 22.04 bis 26.04), und einen Ubuntu-Live-ISO-Builder gibt es noch nicht.
+
 
 Beide Live-ISOs haben einen zusätzlichen Boot-Menüeintrag „... im RAM (toram)“. Er kopiert das ganze System-Image in den RAM (live-boot `toram`), danach lässt sich USB-Stick oder CD entfernen. Der RAM muss größer sein als das Image (etwa so groß wie das ISO, plus Arbeitsspeicher). Bei einem anderen ISO `toram` von Hand an die Kernel-Zeile hängen.
 
@@ -122,6 +125,7 @@ Neben dem ISO schreiben beide Builder einen Ordner `netboot-<Release>-<Arch>/` (
 | ISO-Bau auf einem Ubuntu-Rechner (Debian-`live-build` wird automatisch geholt) | ungetestet |
 | `zfs-rollback-system` | in VM und auf echter Hardware (BIOS) getestet; EFI-Zweig ungetestet |
 | `zfs-chroot-system` | kurz getestet |
+| Ubuntu-Live-System als Installer-Umgebung | ungetestet |
 | `ZFS_BACKPORTS=yes` (Trixie-Live-ISO) | ungetestet |
 | iPXE-Netzwerkstart (`netboot-<Release>-<Arch>/`) | ungetestet |
 | Debian-Live-ISO mit Secure Boot (shim, MokManager, signiertes ZFS-Modul) | ungetestet (Hook nur gegen Dummy-Dateien geprüft; braucht eine VM mit Secure Boot) |
