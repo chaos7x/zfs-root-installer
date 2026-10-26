@@ -90,6 +90,10 @@ Note: pools created by the installer in such a live system enable the features o
 
 Both live ISOs have an extra boot menu entry "... im RAM (toram)". It copies the whole system image into RAM (live-boot `toram`), so the USB stick or CD can be removed afterwards. The RAM must be larger than the image (about the size of the ISO, plus working space). With another ISO, add `toram` to the kernel command line by hand.
 
+## Building the ISO on Ubuntu (untested)
+
+`build-zfs-live-iso.sh` runs natively on Ubuntu. Ubuntu ships its own old `live-build` (3.0~a57) under the same package name, which does not know the options used here. The script detects that and installs Debian's architecture-independent `live-build` package from the Debian archive (`MIRROR`, release from `--dist`); this replaces Ubuntu's `live-build` package on the build machine.
+
 ## Secure Boot with the live ISO (Trixie / Forky)
 
 The Debian live ISO contains `shim-signed` and `mokutil` (also for Bookworm, where the signed boot chain stays off). Built for Trixie or newer, live-build uses shim and Debian's signed GRUB, and the ISO adds MokManager so a key can be enrolled. The ZFS module is built by DKMS and signed with the DKMS key, which is not trusted yet. Enroll it once per machine:
@@ -115,6 +119,7 @@ Besides the ISO, both builders write a folder `netboot-<release>-<arch>/` (in th
 | Devuan Daedalus install + ISO | tested in a VM |
 | Devuan Ceres | untested |
 | Secure Boot on Devuan | not supported |
+| ISO build on an Ubuntu host (Debian `live-build` fetched automatically) | untested |
 | `zfs-rollback-system` | tested in a VM and on real hardware (BIOS); EFI branch untested |
 | `zfs-chroot-system` | lightly tested |
 | `ZFS_BACKPORTS=yes` (Trixie live ISO) | untested |
