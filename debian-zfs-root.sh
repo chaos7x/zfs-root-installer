@@ -74,7 +74,7 @@ Swap:
 
 System:
   --hostname NAME     Hostname                             [debian-<hostid>]
-  --dist NAME         Debian-Release des Zielsystems       [Release des Live-Systems: bookworm, trixie oder forky]
+  --dist NAME         Debian-Release des Zielsystems       [Release des Live-Systems: bookworm, trixie oder forky; bei Ubuntu-Live Pflicht]
   --mirror URL        Mirror fuer debootstrap              [http://deb.debian.org/debian/]
   --components LISTE  Archivbereiche                       [main,contrib,non-free-firmware]
   --backports yes|no  ZFS und GRUB aus <release>-backports     [yes bei bookworm, sonst no]
@@ -268,6 +268,16 @@ done
 ZPOOL=${TARGET_ZPOOL:-root}
 # Name des Root-Datasets (versionsneutral, damit er ein Release-Upgrade ueberlebt)
 ROOTDS=${TARGET_ROOTDS:-debian}
+# Ubuntu als Live-System (ungetestet): /etc/debian_version enthaelt dort z.B. "trixie/sid" und
+# sagt nichts ueber das Ziel. Das Ziel ist weiter ein Debian-System, --dist ist Pflicht.
+UBUNTULIVE=0
+if [ "$(. /etc/os-release 2>/dev/null; echo "${ID:-}")" = ubuntu ]; then
+	UBUNTULIVE=1
+	if [ -z "${TARGET_DIST:-}" ]; then
+		echo "Ubuntu-Live-System erkannt: bitte das Debian-Release des Ziels mit --dist angeben (bookworm, trixie oder forky)." >&2
+		exit 1
+	fi
+fi
 # Standard-Ziel ist das Release des Live-Systems (Bookworm, Trixie oder Forky).
 # Ein Forky-System (Testing) meldet in /etc/debian_version "forky/sid".
 case "$(head -n1 /etc/debian_version)" in
@@ -346,13 +356,18 @@ arm64)
 esac
 
 DEBRELEASE=$(head -n1 /etc/debian_version)
-case $DEBRELEASE in
-12* | 13* | 14* | forky*) ;;
-*)
-	echo "Unsupported Debian Live release: $DEBRELEASE (erwartet: 12.x Bookworm, 13.x Trixie oder Forky)" >&2
-	exit 1
-	;;
-esac
+if [ "$UBUNTULIVE" = 1 ]; then
+	echo "Hinweis: Ubuntu-Live-System ($(. /etc/os-release; echo "$PRETTY_NAME")), ungetestet. Die Pools bekommen die Features" >&2
+	echo "  der ZFS-Version des Live-Systems ($(zfs version 2>/dev/null | head -n1)); ist das Ziel aelter, --compat openzfs-2.x nutzen." >&2
+else
+	case $DEBRELEASE in
+	12* | 13* | 14* | forky*) ;;
+	*)
+		echo "Unsupported Debian Live release: $DEBRELEASE (erwartet: 12.x Bookworm, 13.x Trixie oder Forky)" >&2
+		exit 1
+		;;
+	esac
+fi
 
 ### User settings
 declare -A BYID
@@ -687,6 +702,8 @@ NEED_PACKAGES=()
 if ! modinfo zfs >/dev/null 2>&1; then NEED_PACKAGES+=(zfs-dkms "linux-headers-$(uname -r)"); fi
 command -v zpool >/dev/null || NEED_PACKAGES+=(zfsutils-linux)
 command -v debootstrap >/dev/null || NEED_PACKAGES+=(debootstrap)
+# Ubuntu-Live: debootstrap braucht den Debian-Schluesselbund, um Debian-Pakete zu pruefen
+if [ "$UBUNTULIVE" = 1 ] && ! dpkg -s debian-archive-keyring >/dev/null 2>&1; then NEED_PACKAGES+=(debian-archive-keyring); fi
 command -v sgdisk >/dev/null || NEED_PACKAGES+=(gdisk)
 command -v mkdosfs >/dev/null || NEED_PACKAGES+=(dosfstools)
 
